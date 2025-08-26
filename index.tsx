@@ -11,6 +11,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // Play menu music on first user interaction
     const playMenuMusicOnFirstInteraction = async () => {
+        // Browsers require a user interaction to start the AudioContext.
+        await audioManager.initializeAfterInteraction();
         await audioManager.initMenuMusic();
         audioManager.playMenuMusic();
         // Remove the listener after the first interaction

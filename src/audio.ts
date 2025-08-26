@@ -4,136 +4,139 @@
 */
 
 export class AudioManager {
-    sounds: { [key: string]: HTMLAudioElement[] } = {};
-    activeLoopingSounds: { [key: string]: HTMLAudioElement } = {};
+    private audioContext: AudioContext | null = null;
+    private decodedBuffers: { [key: string]: AudioBuffer } = {};
+    private activeLoopingSources: { [key: string]: AudioBufferSourceNode } = {};
     isMuted: boolean = false;
     private isGameSoundsInitialized: boolean = false;
     private isMenuMusicInitialized: boolean = false;
 
     constructor() {
-        // Initialization is deferred to specific init methods.
+        // Defer context creation to a user interaction
+    }
+
+    private async initAudioContext() {
+        if (this.audioContext) {
+            if (this.audioContext.state === 'suspended') {
+                await this.audioContext.resume();
+            }
+            return;
+        }
+        try {
+            this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        } catch (e) {
+            console.error('Web Audio API is not supported in this browser', e);
+            alert('Web Audio API is not supported in this browser. Sound will not work.');
+        }
+    }
+
+    async initializeAfterInteraction() {
+        await this.initAudioContext();
     }
 
     async initMenuMusic() {
         if (this.isMenuMusicInitialized) return;
         this.isMenuMusicInitialized = true;
-        // Paths are relative to the public directory
-        await this.loadSound('menuMusic', 'sounds/menuMusic.mp3', 1, true);
+        await this.loadSound('menuMusic', 'sounds/menuMusic.mp3');
     }
 
     async initGameSounds() {
-        if (this.isGameSoundsInitialized) {
+        if (this.isGameSoundsInitialized) return;
+        if (!this.audioContext) {
+            console.error("AudioContext not initialized. Call initializeAfterInteraction() first.");
             return;
         }
         this.isGameSoundsInitialized = true;
         
         try {
              await Promise.all([
-                this.loadSound('shoot', 'sounds/shoot.mp3', 10),
-                this.loadSound('enemyShoot', 'sounds/enemyShoot.mp3', 10),
-                this.loadSound('finalbossExplosion', 'sounds/finalbossExplosion.mp3', 1),
-                this.loadSound('AIupgraded', 'sounds/AIupgraded.mp3', 3),
-                this.loadSound('enemyDefeated', 'sounds/enemyDefeated.mp3', 15),
-                this.loadSound('finalbossBegin', 'sounds/finalbossBegin.mp3', 1),
-                this.loadSound('finalbossWarning', 'sounds/finalbossWarning.mp3', 1),
-                this.loadSound('laseringSound', 'sounds/laseringSound.mp3', 1, true),
-                this.loadSound('PlayerDead', 'sounds/PlayerDead.mp3', 1),
-                this.loadSound('Playerupgraded', 'sounds/Playerupgraded.mp3', 3),
+                this.loadSound('shoot', 'sounds/shoot.mp3'),
+                this.loadSound('enemyShoot', 'sounds/enemyShoot.mp3'),
+                this.loadSound('finalbossExplosion', 'sounds/finalbossExplosion.mp3'),
+                this.loadSound('AIupgraded', 'sounds/AIupgraded.mp3'),
+                this.loadSound('enemyDefeated', 'sounds/enemyDefeated.mp3'),
+                this.loadSound('finalbossBegin', 'sounds/finalbossBegin.mp3'),
+                this.loadSound('finalbossWarning', 'sounds/finalbossWarning.mp3'),
+                this.loadSound('laseringSound', 'sounds/laseringSound.mp3'),
+                this.loadSound('PlayerDead', 'sounds/PlayerDead.mp3'),
+                this.loadSound('Playerupgraded', 'sounds/Playerupgraded.mp3'),
             ]);
         } catch (error) {
             console.error("One or more game sounds failed to load.", error);
         }
     }
 
-    private async loadSound(name: string, src: string, poolSize: number = 5, isLooping: boolean = false): Promise<void> {
-        // Prevent re-initialization
-        if (this.sounds[name]?.length > 0) {
+    private async loadSound(name: string, src: string): Promise<void> {
+        if (!this.audioContext) {
+             throw new Error("AudioContext not initialized. Cannot load sound.");
+        }
+        if (this.decodedBuffers[name]) {
             return;
         }
-        
-        // Create an absolute URL from the relative path. This is the most robust method
-        // as it works correctly whether the app is deployed at the root or in a subdirectory.
-        // `window.location.href` provides the base URL of the current page.
+
         const fullPath = new URL(src, window.location.href).href;
 
         try {
-            // Fetch the audio file as a blob. This is more reliable for pathing in deployed apps.
             const response = await fetch(fullPath);
             if (!response.ok) {
-                console.error(`Failed to fetch sound '${name}' at '${fullPath}'. Status: ${response.status}. Content-Type: ${response.headers.get('Content-Type')}`);
                 throw new Error(`HTTP error! status: ${response.status} for ${fullPath}`);
             }
-            const originalBlob = await response.blob();
-
-             // Check if the fetched content is likely HTML, which would indicate a server routing issue.
-            if (originalBlob.type.includes('html')) {
-                 console.error(`Fetched resource for sound '${name}' at '${fullPath}' seems to be an HTML file, not audio. This is likely a server misconfiguration for SPA routing.`);
-                 throw new Error(`Invalid content type for audio file: ${originalBlob.type}`);
-            }
-
-            // Re-create the blob with the correct MIME type to fix "no supported sources" error.
-            const typedBlob = new Blob([originalBlob], { type: 'audio/mpeg' });
-            // Create an in-memory URL for the blob.
-            const objectUrl = URL.createObjectURL(typedBlob);
-
-            this.sounds[name] = [];
-            for (let i = 0; i < poolSize; i++) {
-                const audio = new Audio(objectUrl);
-                audio.preload = 'auto';
-                if (isLooping) {
-                    audio.loop = true;
-                }
-                this.sounds[name].push(audio);
-            }
+            const arrayBuffer = await response.arrayBuffer();
+            // decodeAudioData will throw a specific DOMException if the audio data is invalid/corrupt
+            const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+            this.decodedBuffers[name] = audioBuffer;
         } catch (e) {
-            console.error(`Failed to load sound "${name}" from "${fullPath}":`, e);
-            // Propagate the error to stop Promise.all if needed
+            console.error(`Failed to load and decode sound "${name}" from "${fullPath}":`, e);
             throw e;
         }
     }
 
     playSound(name: string, volume: number = 1.0) {
-        if (this.isMuted || !this.sounds[name] || this.sounds[name].length === 0) return;
+        if (this.isMuted || !this.decodedBuffers[name] || !this.audioContext) return;
 
-        const pool = this.sounds[name];
-        // Find a sound that is not currently playing.
-        const sound = pool.find(a => a.paused || a.ended);
+        const source = this.audioContext.createBufferSource();
+        source.buffer = this.decodedBuffers[name];
+        
+        const gainNode = this.audioContext.createGain();
+        gainNode.gain.setValueAtTime(volume, this.audioContext.currentTime);
 
-        if (sound) {
-            sound.volume = volume;
-            sound.currentTime = 0;
-            sound.play().catch(e => {
-                // Don't log interruptions, as they are normal.
-                if (e.name !== 'AbortError') {
-                    console.error(`Could not play sound: ${name}`, e);
-                }
-            });
-        }
+        source.connect(gainNode);
+        gainNode.connect(this.audioContext.destination);
+        
+        source.start(0);
     }
 
     playLoopingSound(name: string, volume: number = 1.0) {
-        if (this.isMuted || !this.sounds[name] || this.activeLoopingSounds[name]) return;
+        if (this.isMuted || !this.decodedBuffers[name] || this.activeLoopingSources[name] || !this.audioContext) return;
 
-        const sound = this.sounds[name].find(s => s.paused);
-        if (sound) {
-            this.activeLoopingSounds[name] = sound;
-            sound.volume = volume;
-            sound.currentTime = 0;
-            sound.play().catch(e => console.error(`Could not play looping sound: ${name}`, e));
-        }
+        const source = this.audioContext.createBufferSource();
+        source.buffer = this.decodedBuffers[name];
+        source.loop = true;
+        
+        const gainNode = this.audioContext.createGain();
+        gainNode.gain.setValueAtTime(volume, this.audioContext.currentTime);
+
+        source.connect(gainNode);
+        gainNode.connect(this.audioContext.destination);
+
+        source.start(0);
+        this.activeLoopingSources[name] = source;
     }
 
     stopLoopingSound(name: string) {
-        const sound = this.activeLoopingSounds[name];
-        if (sound) {
-            sound.pause();
-            sound.currentTime = 0;
-            delete this.activeLoopingSounds[name];
+        const source = this.activeLoopingSources[name];
+        if (source) {
+            try {
+                source.stop(0);
+            } catch (e) {
+                // Ignore errors if the source has already stopped
+            }
+            delete this.activeLoopingSources[name];
         }
     }
 
     stopAllLoopingSounds() {
-        for (const name in this.activeLoopingSounds) {
+        for (const name in this.activeLoopingSources) {
             this.stopLoopingSound(name);
         }
     }
