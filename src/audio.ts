@@ -3,20 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-// IMPORTANT: Ensure the 'sounds' directory is inside the 'src' directory.
-import menuMusicSrc from './sounds/menuMusic.mp3';
-import shootSrc from './sounds/shoot.mp3';
-import enemyShootSrc from './sounds/enemyShoot.mp3';
-import finalbossExplosionSrc from './sounds/finalbossExplosion.mp3';
-import AIupgradedSrc from './sounds/AIupgraded.mp3';
-import enemyDefeatedSrc from './sounds/enemyDefeated.mp3';
-import finalbossBeginSrc from './sounds/finalbossBegin.mp3';
-import finalbossWarningSrc from './sounds/finalbossWarning.mp3';
-import laseringSoundSrc from './sounds/laseringSound.mp3';
-import PlayerDeadSrc from './sounds/PlayerDead.mp3';
-import PlayerupgradedSrc from './sounds/Playerupgraded.mp3';
-
-
 export class AudioManager {
     private audioContext: AudioContext | null = null;
     private decodedBuffers: { [key: string]: AudioBuffer } = {};
@@ -25,18 +11,20 @@ export class AudioManager {
     private isGameSoundsInitialized: boolean = false;
     private isMenuMusicInitialized: boolean = false;
 
+    // --- SOLUTION: Use absolute URLs from a reliable CDN (ImageKit) ---
+    // This bypasses any server-side routing issues (SPA fallback) on the deployment platform.
     private soundSources: Record<string, string> = {
-        'menuMusic': menuMusicSrc,
-        'shoot': shootSrc,
-        'enemyShoot': enemyShootSrc,
-        'finalbossExplosion': finalbossExplosionSrc,
-        'AIupgraded': AIupgradedSrc,
-        'enemyDefeated': enemyDefeatedSrc,
-        'finalbossBegin': finalbossBeginSrc,
-        'finalbossWarning': finalbossWarningSrc,
-        'laseringSound': laseringSoundSrc,
-        'PlayerDead': PlayerDeadSrc,
-        'Playerupgraded': PlayerupgradedSrc,
+        'menuMusic': 'https://ik.imagekit.io/irammini/sounds/menuMusic.mp3',
+        'shoot': 'https://ik.imagekit.io/irammini/sounds/shoot.mp3',
+        'enemyShoot': 'https://ik.imagekit.io/irammini/sounds/enemyShoot.mp3',
+        'finalbossExplosion': 'https://ik.imagekit.io/irammini/sounds/finalbossExplosion.mp3',
+        'AIupgraded': 'https://ik.imagekit.io/irammini/sounds/AIupgraded.mp3',
+        'enemyDefeated': 'https://ik.imagekit.io/irammini/sounds/enemyDefeated.mp3',
+        'finalbossBegin': 'https://ik.imagekit.io/irammini/sounds/finalbossBegin.mp3',
+        'finalbossWarning': 'https://ik.imagekit.io/irammini/sounds/finalbossWarning.mp3',
+        'laseringSound': 'https://ik.imagekit.io/irammini/sounds/laseringSound.mp3',
+        'PlayerDead': 'https://ik.imagekit.io/irammini/sounds/PlayerDead.mp3',
+        'Playerupgraded': 'https://ik.imagekit.io/irammini/sounds/Playerupgraded.mp3',
     };
 
     constructor() {
@@ -94,7 +82,7 @@ export class AudioManager {
 
         const fullPath = this.soundSources[name];
          if (!fullPath) {
-            const error = new Error(`Sound source for "${name}" not found. Have you moved the 'sounds' folder into 'src'?`);
+            const error = new Error(`Sound source URL for "${name}" not found.`);
             console.error(error);
             throw error;
         }
@@ -105,6 +93,12 @@ export class AudioManager {
                 throw new Error(`HTTP error! status: ${response.status} for ${fullPath}`);
             }
             
+            // Diagnostic check: If server returns HTML, throw a clear error.
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('text/html')) {
+                throw new Error(`Server returned a file that looks like HTML instead of an audio file. Check your CDN paths and server configuration. URL: ${fullPath}`);
+            }
+
             const arrayBuffer = await response.arrayBuffer();
             // decodeAudioData will throw a specific DOMException if the audio data is invalid/corrupt
             const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
