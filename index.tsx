@@ -24,6 +24,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
 
     UI.playButton.addEventListener('click', async () => {
+        // Ensure context is initialized, fixing a race condition if this is the first interaction.
+        await audioManager.initializeAfterInteraction();
         audioManager.stopMenuMusic();
         UI.mainContainer.classList.add('hidden');
         UI.loadingContainer.classList.add('visible');

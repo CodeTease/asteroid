@@ -81,6 +81,13 @@ export class AudioManager {
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status} for ${fullPath}`);
             }
+
+            // Diagnostic check for SPA fallback issue
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('text/html')) {
+                throw new Error(`Server returned HTML instead of audio for ${fullPath}. This is likely due to a misconfigured SPA fallback rule on your hosting service.`);
+            }
+
             const arrayBuffer = await response.arrayBuffer();
             // decodeAudioData will throw a specific DOMException if the audio data is invalid/corrupt
             const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
