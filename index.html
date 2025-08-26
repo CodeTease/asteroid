@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kẻ Hủy Diệt Tiểu Hành Tinh</title>
+    <link rel="icon" type="image/png" href="https://ik.imagekit.io/irammini/Teaserverse_icon?updatedAt=1756019938040">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="index.css">
+</head>
+<body>
+    <div class="stars"></div>
+    <div class="scanlines"></div>
+
+    <div class="container" id="main-container">
+        <h1>Kẻ Hủy Diệt Tiểu Hành Tinh</h1>
+        <p>Tiêu diệt tất cả tiểu hành tinh và sống sót lâu nhất có thể!</p>
+        <div class="menu-buttons">
+            <button id="play-button">Chơi ngay!</button>
+            <button id="how-to-play-button">Hướng dẫn</button>
+        </div>
+        <div class="credits">
+            <p>Powered by <a href="https://teaserverse.qzz.io/" target="_blank" rel="noopener noreferrer">Teaserverse</a></p>
+            <p>Sound effects from <a href="https://freesound.org/" target="_blank" rel="noopener noreferrer">Freesound.org</a></p>
+        </div>
+        <p id="development-disclaimer">Lưu ý: Trò chơi đang trong giai đoạn phát triển. Âm thanh và tính năng có thể chưa hoàn thiện.</p>
+    </div>
+    
+    <div id="loading-container" class="loading-container">
+        <div class="loader"></div>
+        <p>Đang tải tài nguyên...</p>
+    </div>
+
+    <div class="game-area" id="game-area">
+        <div id="final-boss-health-container">
+            <div id="final-boss-health-bar"></div>
+        </div>
+        <canvas id="gameCanvas" width="600" height="400"></canvas>
+        <div class="divider-line"></div>
+        <div class="hud-panel unselectable">
+            <div class="hud-group">
+                <span class="hud-item">🌟 <span id="score">0</span></span>
+                <span class="hud-item">🛡️ <span id="shields">0</span></span>
+                <span class="hud-item">💠 <span id="upgrade-points">0</span></span>
+            </div>
+            <div class="hud-group">
+                <span class="hud-item" id="game-status">Sẵn sàng</span>
+            </div>
+            <div class="hud-group">
+                <span class="hud-item">⏱️ <span id="timer">0s</span></span>
+            </div>
+        </div>
+    </div>
+    
+    <div id="message-box" class="message-box unselectable">
+        <h2 id="message-title"></h2>
+        <p id="message-text"></p>
+        <div class="button-group">
+            <button id="message-button">Chơi Lại</button>
+            <button id="back-to-menu-button">Về Menu</button>
+        </div>
+    </div>
+
+    <div id="upgrade-modal" class="message-box unselectable">
+        <h2 id="upgrade-title">Nâng cấp!</h2>
+        <p>Bạn có <span id="upgrade-points-count">0</span> điểm nâng cấp. 💠</p>
+        <div class="upgrade-options">
+             <div class="upgrade-category">
+                <h3>Đồng minh thường</h3>
+                <button id="upgrade-firerate" data-cost="1">Bắn Nhanh Hơn (<span id="firerate-level">0/5</span>)</button>
+                <button id="upgrade-doubleshot" data-cost="1">Bắn Gấp Đôi</button>
+                <button id="upgrade-projectilespeed" data-cost="1">Đạn Chính Xác Hơn</button>
+            </div>
+            <div class="upgrade-category" id="laser-ally-upgrades" style="display: none;">
+                <h3>Đồng minh Laser</h3>
+                <button id="upgrade-laser-damage" data-cost="3">Tăng Sát Thương Laser (<span id="laser-damage-level">0/5</span>)</button>
+                <button id="upgrade-laser-cooldown" data-cost="4">Giảm Hồi Chiêu Laser (<span id="laser-cooldown-level">0/5</span>)</button>
+            </div>
+        </div>
+        <div class="auto-upgrade-container">
+            <input type="checkbox" id="auto-upgrade-checkbox">
+            <label for="auto-upgrade-checkbox">Tự động nâng cấp</label>
+        </div>
+        <button id="continue-button">Tiếp Tục</button>
+    </div>
+
+    <div id="how-to-play-modal" class="message-box unselectable">
+        <h2>Hướng dẫn</h2>
+        <div class="how-to-play-content">
+            <div class="how-to-play-item">
+                <div class="how-to-play-icon icon-player"></div>
+                <p><strong>Bạn:</strong> Di chuyển bằng phím mũi tên hoặc kéo thả trên màn hình. Bắn tự động khi nhấn giữ chuột/chạm.</p>
+            </div>
+            <div class="how-to-play-item">
+                <div class="how-to-play-icon icon-enemy"></div>
+                <p><strong>Kẻ địch:</strong> Tiêu diệt các tiểu hành tinh để ghi điểm. Cẩn thận với những loại đặc biệt!</p>
+            </div>
+            <div class="how-to-play-item">
+                <div class="how-to-play-icon icon-ally"></div>
+                <p><strong>Đồng minh:</strong> Đạt mốc điểm cao để triệu hồi các đồng minh AI hỗ trợ bạn trong trận chiến.</p>
+            </div>
+        </div>
+        <button id="close-how-to-play-button">Đã hiểu</button>
+    </div>
+
+    <script type="module" src="index.tsx"></script>
+</body>
+</html>
