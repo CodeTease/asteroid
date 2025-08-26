@@ -14,6 +14,8 @@ export class AudioManager {
         // Initialization is deferred to specific init methods.
     }
 
+
+
     async initMenuMusic() {
         if (this.isMenuMusicInitialized) return;
         this.isMenuMusicInitialized = true;
@@ -57,9 +59,11 @@ export class AudioManager {
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status} for ${src}`);
             }
-            const blob = await response.blob();
+            const originalBlob = await response.blob();
+            // Re-create the blob with the correct MIME type to fix "no supported sources" error.
+            const typedBlob = new Blob([originalBlob], { type: 'audio/mpeg' });
             // Create an in-memory URL for the blob.
-            const objectUrl = URL.createObjectURL(blob);
+            const objectUrl = URL.createObjectURL(typedBlob);
 
             this.sounds[name] = [];
             for (let i = 0; i < poolSize; i++) {
@@ -88,7 +92,10 @@ export class AudioManager {
             sound.volume = volume;
             sound.currentTime = 0;
             sound.play().catch(e => {
-                console.error(`Could not play sound: ${name}`, e);
+                // Don't log interruptions, as they are normal.
+                if (e.name !== 'AbortError') {
+                    console.error(`Could not play sound: ${name}`, e);
+                }
             });
         }
     }
