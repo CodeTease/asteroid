@@ -13,7 +13,19 @@ declare global {
   }
 }
 
-const soundPath = (path: string) => `${import.meta.env.BASE_URL}${path}`;
+/**
+ * Constructs a full, correct URL for a public asset. This is more robust than
+ * string concatenation as it correctly handles various base path scenarios.
+ * @param path The relative path to the asset from the public root (e.g., 'sounds/shoot.mp3').
+ * @returns The absolute URL to the asset.
+ */
+const soundUrl = (path: string): string => {
+  // `import.meta.env.BASE_URL` is the base path of the deployment, e.g., '/' or '/my-repo/'.
+  // `window.location.origin` is the protocol, domain, and port, e.g., 'https://my-site.com'.
+  // new URL() correctly joins these parts to form a valid, absolute URL.
+  const deploymentBaseUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href;
+  return new URL(path, deploymentBaseUrl).href;
+};
 
 export class AudioManager {
     sounds: { [key: string]: HTMLAudioElement[] } = {};
@@ -29,7 +41,7 @@ export class AudioManager {
     async initMenuMusic() {
         if (this.isMenuMusicInitialized) return;
         this.isMenuMusicInitialized = true;
-        await this.loadSound('menuMusic', soundPath('sounds/menuMusic.mp3'), 1, true);
+        await this.loadSound('menuMusic', soundUrl('sounds/menuMusic.mp3'), 1, true);
     }
 
     async initGameSounds() {
@@ -40,16 +52,16 @@ export class AudioManager {
         
         try {
              await Promise.all([
-                this.loadSound('shoot', soundPath('sounds/shoot.mp3'), 10),
-                this.loadSound('enemyShoot', soundPath('sounds/enemyShoot.mp3'), 10),
-                this.loadSound('finalbossExplosion', soundPath('sounds/finalbossExplosion.mp3'), 1),
-                this.loadSound('AIupgraded', soundPath('sounds/AIupgraded.mp3'), 3),
-                this.loadSound('enemyDefeated', soundPath('sounds/enemyDefeated.mp3'), 15),
-                this.loadSound('finalbossBegin', soundPath('sounds/finalbossBegin.mp3'), 1),
-                this.loadSound('finalbossWarning', soundPath('sounds/finalbossWarning.mp3'), 1),
-                this.loadSound('laseringSound', soundPath('sounds/laseringSound.mp3'), 1, true),
-                this.loadSound('PlayerDead', soundPath('sounds/PlayerDead.mp3'), 1),
-                this.loadSound('Playerupgraded', soundPath('sounds/Playerupgraded.mp3'), 3),
+                this.loadSound('shoot', soundUrl('sounds/shoot.mp3'), 10),
+                this.loadSound('enemyShoot', soundUrl('sounds/enemyShoot.mp3'), 10),
+                this.loadSound('finalbossExplosion', soundUrl('sounds/finalbossExplosion.mp3'), 1),
+                this.loadSound('AIupgraded', soundUrl('sounds/AIupgraded.mp3'), 3),
+                this.loadSound('enemyDefeated', soundUrl('sounds/enemyDefeated.mp3'), 15),
+                this.loadSound('finalbossBegin', soundUrl('sounds/finalbossBegin.mp3'), 1),
+                this.loadSound('finalbossWarning', soundUrl('sounds/finalbossWarning.mp3'), 1),
+                this.loadSound('laseringSound', soundUrl('sounds/laseringSound.mp3'), 1, true),
+                this.loadSound('PlayerDead', soundUrl('sounds/PlayerDead.mp3'), 1),
+                this.loadSound('Playerupgraded', soundUrl('sounds/Playerupgraded.mp3'), 3),
             ]);
         } catch (error) {
             console.error("One or more game sounds failed to load.", error);
