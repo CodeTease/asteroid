@@ -40,28 +40,42 @@ export class AudioManager {
         ]);
     }
 
-    async loadSound(name: string, src: string, poolSize: number = 5, isLooping: boolean = false) {
-        try {
-            const response = await fetch(src);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status} for ${src}`);
-            }
-            const blob = await response.blob();
-            const objectUrl = URL.createObjectURL(blob);
+    async loadSound(name: string, src: string, poolSize: number = 5, isLooping: boolean = false): Promise<void> {
+        return new Promise((resolve, reject) => {
+            try {
+                this.sounds[name] = [];
+                let loadedCount = 0;
 
-            this.sounds[name] = [];
-            for (let i = 0; i < poolSize; i++) {
-                const audio = new Audio(objectUrl);
-                audio.preload = 'auto';
-                if (isLooping) {
-                    audio.loop = true;
+                const onLoaded = () => {
+                    loadedCount++;
+                    if (loadedCount === poolSize) {
+                        resolve();
+                    }
+                };
+                
+                const onError = (e: Event | string) => {
+                    console.error(`Error loading sound: ${name} from ${src}`, e);
+                    reject(new Error(`Could not load sound: ${name}`));
+                };
+
+                for (let i = 0; i < poolSize; i++) {
+                    const audio = new Audio(src);
+                    audio.preload = 'auto';
+                    if (isLooping) {
+                        audio.loop = true;
+                    }
+                    audio.addEventListener('canplaythrough', onLoaded, { once: true });
+                    audio.addEventListener('error', onError, { once: true });
+                    this.sounds[name].push(audio);
+                    audio.load(); // Force loading to start
                 }
-                this.sounds[name].push(audio);
+            } catch (e) {
+                console.error(`Failed to create audio for "${name}" from "${src}":`, e);
+                reject(e);
             }
-        } catch (e) {
-            console.error(`Failed to load sound "${name}" from "${src}":`, e);
-        }
+        });
     }
+
 
     playSound(name: string, volume: number = 1.0) {
         if (this.isMuted || !this.sounds[name]) return;
