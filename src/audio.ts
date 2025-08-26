@@ -17,7 +17,7 @@ export class AudioManager {
     async initMenuMusic() {
         if (this.isMenuMusicInitialized) return;
         this.isMenuMusicInitialized = true;
-        await this.loadSound('menuMusic', 'sounds/menuMusic.mp3', 1, true);
+        await this.loadSound('menuMusic', '/sounds/menuMusic.mp3', 1, true);
     }
 
     async initGameSounds() {
@@ -27,16 +27,16 @@ export class AudioManager {
         this.isGameSoundsInitialized = true;
         
         await Promise.all([
-            this.loadSound('shoot', 'sounds/shoot.mp3', 10),
-            this.loadSound('enemyShoot', 'sounds/enemyShoot.mp3', 10),
-            this.loadSound('finalbossExplosion', 'sounds/finalbossExplosion.mp3', 1),
-            this.loadSound('AIupgraded', 'sounds/AIupgraded.mp3', 3),
-            this.loadSound('enemyDefeated', 'sounds/enemyDefeated.mp3', 15),
-            this.loadSound('finalbossBegin', 'sounds/finalbossBegin.mp3', 1),
-            this.loadSound('finalbossWarning', 'sounds/finalbossWarning.mp3', 1),
-            this.loadSound('laseringSound', 'sounds/laseringSound.mp3', 1, true),
-            this.loadSound('PlayerDead', 'sounds/PlayerDead.mp3', 1),
-            this.loadSound('Playerupgraded', 'sounds/Playerupgraded.mp3', 3),
+            this.loadSound('shoot', '/sounds/shoot.mp3', 10),
+            this.loadSound('enemyShoot', '/sounds/enemyShoot.mp3', 10),
+            this.loadSound('finalbossExplosion', '/sounds/finalbossExplosion.mp3', 1),
+            this.loadSound('AIupgraded', '/sounds/AIupgraded.mp3', 3),
+            this.loadSound('enemyDefeated', '/sounds/enemyDefeated.mp3', 15),
+            this.loadSound('finalbossBegin', '/sounds/finalbossBegin.mp3', 1),
+            this.loadSound('finalbossWarning', '/sounds/finalbossWarning.mp3', 1),
+            this.loadSound('laseringSound', '/sounds/laseringSound.mp3', 1, true),
+            this.loadSound('PlayerDead', '/sounds/PlayerDead.mp3', 1),
+            this.loadSound('Playerupgraded', '/sounds/Playerupgraded.mp3', 3),
         ]);
     }
 
