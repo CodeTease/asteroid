@@ -56,23 +56,47 @@ export class AudioManager {
                 };
                 
                 const onError = (e: Event | string) => {
-                    console.error(`Error loading sound: ${name} from ${src}`, e);
+                    console.error(`Error loading sound asset: ${name} from ${src}.`, e);
+                    const errorEvent = e as ErrorEvent;
+                    const target = errorEvent.target as HTMLAudioElement;
+                    if (target && target.error) {
+                        switch(target.error.code) {
+                            case 1: // MEDIA_ERR_ABORTED
+                                console.error('The fetching process for the media was aborted by the user agent at the user\'s request.');
+                                break;
+                            case 2: // MEDIA_ERR_NETWORK
+                                console.error('A network error of some description caused the user agent to stop fetching the media, despite previously being available.');
+                                break;
+                            case 3: // MEDIA_ERR_DECODE
+                                console.error('An error of some description occurred while decoding the media resource, after it was determined to be usable.');
+                                break;
+                            case 4: // MEDIA_ERR_SRC_NOT_SUPPORTED
+                                console.error('The media resource indicated by the src attribute was not suitable.');
+                                break;
+                            default:
+                                console.error('An unknown error occurred.');
+                                break;
+                        }
+                    }
                     reject(new Error(`Could not load sound: ${name}`));
                 };
 
                 for (let i = 0; i < poolSize; i++) {
-                    const audio = new Audio(src);
+                    const audio = new Audio();
                     audio.preload = 'auto';
                     if (isLooping) {
                         audio.loop = true;
                     }
+                    
+                    // Attach listeners before setting src to avoid race conditions
                     audio.addEventListener('canplaythrough', onLoaded, { once: true });
                     audio.addEventListener('error', onError, { once: true });
+                    
                     this.sounds[name].push(audio);
-                    audio.load(); // Force loading to start
+                    audio.src = src; // Set src to trigger loading
                 }
             } catch (e) {
-                console.error(`Failed to create audio for "${name}" from "${src}":`, e);
+                console.error(`Failed to create audio element for "${name}" from "${src}":`, e);
                 reject(e);
             }
         });
