@@ -2,9 +2,9 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import { Game } from './game.js';
-import * as UI from './ui.js';
-import { audioManager } from './audio.js';
+import { Game } from './src/game.js';
+import * as UI from './src/ui.js';
+import { audioManager } from './src/audio.js';
 
 window.addEventListener('DOMContentLoaded', () => {
     const game = new Game();

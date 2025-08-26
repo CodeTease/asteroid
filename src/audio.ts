@@ -3,6 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
+// Fix for TypeScript error: Property 'env' does not exist on type 'ImportMeta'.
+// This adds a global type definition for Vite's import.meta.env.
+declare global {
+  interface ImportMeta {
+    readonly env: {
+      readonly BASE_URL: string;
+    };
+  }
+}
+
+const soundPath = (path: string) => `${import.meta.env.BASE_URL}${path}`;
+
 export class AudioManager {
     sounds: { [key: string]: HTMLAudioElement[] } = {};
     activeLoopingSounds: { [key: string]: HTMLAudioElement } = {};
@@ -17,7 +29,7 @@ export class AudioManager {
     async initMenuMusic() {
         if (this.isMenuMusicInitialized) return;
         this.isMenuMusicInitialized = true;
-        await this.loadSound('menuMusic', 'sounds/menuMusic.mp3', 1, true);
+        await this.loadSound('menuMusic', soundPath('sounds/menuMusic.mp3'), 1, true);
     }
 
     async initGameSounds() {
@@ -28,16 +40,16 @@ export class AudioManager {
         
         try {
              await Promise.all([
-                this.loadSound('shoot', 'sounds/shoot.mp3', 10),
-                this.loadSound('enemyShoot', 'sounds/enemyShoot.mp3', 10),
-                this.loadSound('finalbossExplosion', 'sounds/finalbossExplosion.mp3', 1),
-                this.loadSound('AIupgraded', 'sounds/AIupgraded.mp3', 3),
-                this.loadSound('enemyDefeated', 'sounds/enemyDefeated.mp3', 15),
-                this.loadSound('finalbossBegin', 'sounds/finalbossBegin.mp3', 1),
-                this.loadSound('finalbossWarning', 'sounds/finalbossWarning.mp3', 1),
-                this.loadSound('laseringSound', 'sounds/laseringSound.mp3', 1, true),
-                this.loadSound('PlayerDead', 'sounds/PlayerDead.mp3', 1),
-                this.loadSound('Playerupgraded', 'sounds/Playerupgraded.mp3', 3),
+                this.loadSound('shoot', soundPath('sounds/shoot.mp3'), 10),
+                this.loadSound('enemyShoot', soundPath('sounds/enemyShoot.mp3'), 10),
+                this.loadSound('finalbossExplosion', soundPath('sounds/finalbossExplosion.mp3'), 1),
+                this.loadSound('AIupgraded', soundPath('sounds/AIupgraded.mp3'), 3),
+                this.loadSound('enemyDefeated', soundPath('sounds/enemyDefeated.mp3'), 15),
+                this.loadSound('finalbossBegin', soundPath('sounds/finalbossBegin.mp3'), 1),
+                this.loadSound('finalbossWarning', soundPath('sounds/finalbossWarning.mp3'), 1),
+                this.loadSound('laseringSound', soundPath('sounds/laseringSound.mp3'), 1, true),
+                this.loadSound('PlayerDead', soundPath('sounds/PlayerDead.mp3'), 1),
+                this.loadSound('Playerupgraded', soundPath('sounds/Playerupgraded.mp3'), 3),
             ]);
         } catch (error) {
             console.error("One or more game sounds failed to load.", error);
