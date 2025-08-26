@@ -3,19 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-// Import sound assets to get correct paths from Vite
-import menuMusicUrl from '/sounds/menuMusic.mp3';
-import shootUrl from '/sounds/shoot.mp3';
-import enemyShootUrl from '/sounds/enemyShoot.mp3';
-import finalbossExplosionUrl from '/sounds/finalbossExplosion.mp3';
-import AIupgradedUrl from '/sounds/AIupgraded.mp3';
-import enemyDefeatedUrl from '/sounds/enemyDefeated.mp3';
-import finalbossBeginUrl from '/sounds/finalbossBegin.mp3';
-import finalbossWarningUrl from '/sounds/finalbossWarning.mp3';
-import laseringSoundUrl from '/sounds/laseringSound.mp3';
-import PlayerDeadUrl from '/sounds/PlayerDead.mp3';
-import PlayerupgradedUrl from '/sounds/Playerupgraded.mp3';
-
 export class AudioManager {
     sounds: { [key: string]: HTMLAudioElement[] } = {};
     activeLoopingSounds: { [key: string]: HTMLAudioElement } = {};
@@ -30,7 +17,7 @@ export class AudioManager {
     async initMenuMusic() {
         if (this.isMenuMusicInitialized) return;
         this.isMenuMusicInitialized = true;
-        await this.loadSound('menuMusic', menuMusicUrl, 1, true);
+        await this.loadSound('menuMusic', '/sounds/menuMusic.mp3', 1, true);
     }
 
     async initGameSounds() {
@@ -41,16 +28,16 @@ export class AudioManager {
         
         try {
              await Promise.all([
-                this.loadSound('shoot', shootUrl, 10),
-                this.loadSound('enemyShoot', enemyShootUrl, 10),
-                this.loadSound('finalbossExplosion', finalbossExplosionUrl, 1),
-                this.loadSound('AIupgraded', AIupgradedUrl, 3),
-                this.loadSound('enemyDefeated', enemyDefeatedUrl, 15),
-                this.loadSound('finalbossBegin', finalbossBeginUrl, 1),
-                this.loadSound('finalbossWarning', finalbossWarningUrl, 1),
-                this.loadSound('laseringSound', laseringSoundUrl, 1, true),
-                this.loadSound('PlayerDead', PlayerDeadUrl, 1),
-                this.loadSound('Playerupgraded', PlayerupgradedUrl, 3),
+                this.loadSound('shoot', '/sounds/shoot.mp3', 10),
+                this.loadSound('enemyShoot', '/sounds/enemyShoot.mp3', 10),
+                this.loadSound('finalbossExplosion', '/sounds/finalbossExplosion.mp3', 1),
+                this.loadSound('AIupgraded', '/sounds/AIupgraded.mp3', 3),
+                this.loadSound('enemyDefeated', '/sounds/enemyDefeated.mp3', 15),
+                this.loadSound('finalbossBegin', '/sounds/finalbossBegin.mp3', 1),
+                this.loadSound('finalbossWarning', '/sounds/finalbossWarning.mp3', 1),
+                this.loadSound('laseringSound', '/sounds/laseringSound.mp3', 1, true),
+                this.loadSound('PlayerDead', '/sounds/PlayerDead.mp3', 1),
+                this.loadSound('Playerupgraded', '/sounds/Playerupgraded.mp3', 3),
             ]);
         } catch (error) {
             console.error("One or more game sounds failed to load.", error);
