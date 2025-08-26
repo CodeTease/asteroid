@@ -3,20 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-/**
- * Constructs the correct public path for an asset.
- * In a Vite project, `import.meta.env.BASE_URL` provides the correct base path,
- * which is '/' for a root deployment or '/repository-name/' for a GitHub Pages deployment.
- * @param relativePath The path to the asset relative to the public directory.
- * @returns The absolute path to the asset.
- */
-function getAssetPath(relativePath: string): string {
-    // Ensures there's no double slash between the base and the relative path.
-    // FIX: Cast `import.meta` to `any` to access the Vite-specific `env` property
-    return ((import.meta as any).env.BASE_URL + relativePath).replace(/\/+/g, '/');
-}
-
-
 export class AudioManager {
     sounds: { [key: string]: HTMLAudioElement[] } = {};
     activeLoopingSounds: { [key: string]: HTMLAudioElement } = {};
@@ -65,7 +51,10 @@ export class AudioManager {
             return;
         }
         
-        const fullPath = getAssetPath(src);
+        // Create an absolute URL from the relative path. This is the most robust method
+        // as it works correctly whether the app is deployed at the root or in a subdirectory.
+        // `window.location.href` provides the base URL of the current page.
+        const fullPath = new URL(src, window.location.href).href;
 
         try {
             // Fetch the audio file as a blob. This is more reliable for pathing in deployed apps.
