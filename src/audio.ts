@@ -40,20 +40,29 @@ export class AudioManager {
         ]);
     }
 
+    private arrayBufferToBase64(buffer: ArrayBuffer): string {
+        let binary = '';
+        const bytes = new Uint8Array(buffer);
+        const len = bytes.byteLength;
+        for (let i = 0; i < len; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return window.btoa(binary);
+    }
+
     async loadSound(name: string, src: string, poolSize: number = 5, isLooping: boolean = false) {
         try {
             const response = await fetch(src);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status} for ${src}`);
             }
-            // Read as ArrayBuffer and explicitly create a Blob with the correct MIME type
             const arrayBuffer = await response.arrayBuffer();
-            const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
-            const objectUrl = URL.createObjectURL(blob);
+            const base64String = this.arrayBufferToBase64(arrayBuffer);
+            const dataUrl = `data:audio/mpeg;base64,${base64String}`;
 
             this.sounds[name] = [];
             for (let i = 0; i < poolSize; i++) {
-                const audio = new Audio(objectUrl);
+                const audio = new Audio(dataUrl);
                 audio.preload = 'auto';
                 if (isLooping) {
                     audio.loop = true;
