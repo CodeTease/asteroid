@@ -3,30 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-// Fix for TypeScript error: Property 'env' does not exist on type 'ImportMeta'.
-// This adds a global type definition for Vite's import.meta.env.
-declare global {
-  interface ImportMeta {
-    readonly env: {
-      readonly BASE_URL: string;
-    };
-  }
-}
-
-/**
- * Constructs a full, correct URL for a public asset. This is more robust than
- * string concatenation as it correctly handles various base path scenarios.
- * @param path The relative path to the asset from the public root (e.g., 'sounds/shoot.mp3').
- * @returns The absolute URL to the asset.
- */
-const soundUrl = (path: string): string => {
-  // `import.meta.env.BASE_URL` is the base path of the deployment, e.g., '/' or '/my-repo/'.
-  // `window.location.origin` is the protocol, domain, and port, e.g., 'https://my-site.com'.
-  // new URL() correctly joins these parts to form a valid, absolute URL.
-  const deploymentBaseUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href;
-  return new URL(path, deploymentBaseUrl).href;
-};
-
 export class AudioManager {
     sounds: { [key: string]: HTMLAudioElement[] } = {};
     activeLoopingSounds: { [key: string]: HTMLAudioElement } = {};
@@ -41,7 +17,8 @@ export class AudioManager {
     async initMenuMusic() {
         if (this.isMenuMusicInitialized) return;
         this.isMenuMusicInitialized = true;
-        await this.loadSound('menuMusic', soundUrl('sounds/menuMusic.mp3'), 1, true);
+        // Paths are relative to the public directory
+        await this.loadSound('menuMusic', 'sounds/menuMusic.mp3', 1, true);
     }
 
     async initGameSounds() {
@@ -52,70 +29,52 @@ export class AudioManager {
         
         try {
              await Promise.all([
-                this.loadSound('shoot', soundUrl('sounds/shoot.mp3'), 10),
-                this.loadSound('enemyShoot', soundUrl('sounds/enemyShoot.mp3'), 10),
-                this.loadSound('finalbossExplosion', soundUrl('sounds/finalbossExplosion.mp3'), 1),
-                this.loadSound('AIupgraded', soundUrl('sounds/AIupgraded.mp3'), 3),
-                this.loadSound('enemyDefeated', soundUrl('sounds/enemyDefeated.mp3'), 15),
-                this.loadSound('finalbossBegin', soundUrl('sounds/finalbossBegin.mp3'), 1),
-                this.loadSound('finalbossWarning', soundUrl('sounds/finalbossWarning.mp3'), 1),
-                this.loadSound('laseringSound', soundUrl('sounds/laseringSound.mp3'), 1, true),
-                this.loadSound('PlayerDead', soundUrl('sounds/PlayerDead.mp3'), 1),
-                this.loadSound('Playerupgraded', soundUrl('sounds/Playerupgraded.mp3'), 3),
+                this.loadSound('shoot', 'sounds/shoot.mp3', 10),
+                this.loadSound('enemyShoot', 'sounds/enemyShoot.mp3', 10),
+                this.loadSound('finalbossExplosion', 'sounds/finalbossExplosion.mp3', 1),
+                this.loadSound('AIupgraded', 'sounds/AIupgraded.mp3', 3),
+                this.loadSound('enemyDefeated', 'sounds/enemyDefeated.mp3', 15),
+                this.loadSound('finalbossBegin', 'sounds/finalbossBegin.mp3', 1),
+                this.loadSound('finalbossWarning', 'sounds/finalbossWarning.mp3', 1),
+                this.loadSound('laseringSound', 'sounds/laseringSound.mp3', 1, true),
+                this.loadSound('PlayerDead', 'sounds/PlayerDead.mp3', 1),
+                this.loadSound('Playerupgraded', 'sounds/Playerupgraded.mp3', 3),
             ]);
         } catch (error) {
             console.error("One or more game sounds failed to load.", error);
         }
     }
 
-    private loadSound(name: string, src: string, poolSize: number = 5, isLooping: boolean = false): Promise<void> {
-        return new Promise((resolve, reject) => {
-            // Prevent re-initialization
-            if (this.sounds[name]?.length > 0) {
-                resolve();
-                return;
+    private async loadSound(name: string, src: string, poolSize: number = 5, isLooping: boolean = false): Promise<void> {
+        // Prevent re-initialization
+        if (this.sounds[name]?.length > 0) {
+            return;
+        }
+        
+        try {
+            // Fetch the audio file as a blob. This is more reliable for pathing in deployed apps.
+            const response = await fetch(src);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status} for ${src}`);
             }
+            const blob = await response.blob();
+            // Create an in-memory URL for the blob.
+            const objectUrl = URL.createObjectURL(blob);
 
             this.sounds[name] = [];
-            let loadedCount = 0;
-            let errorCount = 0;
-
-            const checkCompletion = () => {
-                if (loadedCount + errorCount === poolSize) {
-                    if (errorCount > 0) {
-                        reject(new Error(`${errorCount} instance(s) of sound ${name} failed to load from ${src}.`));
-                    } else {
-                        resolve();
-                    }
-                }
-            };
-
             for (let i = 0; i < poolSize; i++) {
-                const audio = new Audio();
-                
-                const onCanPlayThrough = () => {
-                    loadedCount++;
-                    checkCompletion();
-                };
-
-                const onError = (e: Event) => {
-                    errorCount++;
-                    console.error(`Error loading sound asset: ${name} from ${src}. Event:`, e);
-                    checkCompletion();
-                };
-                
-                audio.addEventListener('canplaythrough', onCanPlayThrough, { once: true });
-                audio.addEventListener('error', onError, { once: true });
-                
+                const audio = new Audio(objectUrl);
                 audio.preload = 'auto';
                 if (isLooping) {
                     audio.loop = true;
                 }
-                audio.src = src; // Set src to trigger loading
-                
                 this.sounds[name].push(audio);
             }
-        });
+        } catch (e) {
+            console.error(`Failed to load sound "${name}" from "${src}":`, e);
+            // Propagate the error to stop Promise.all if needed
+            throw e;
+        }
     }
 
     playSound(name: string, volume: number = 1.0) {
@@ -129,11 +88,7 @@ export class AudioManager {
             sound.volume = volume;
             sound.currentTime = 0;
             sound.play().catch(e => {
-                // Don't log the infamous NotSupportedError every time play is attempted.
-                // The loading error is more important.
-                if (e.name !== 'NotSupportedError') { 
-                    console.error(`Could not play sound: ${name}`, e);
-                }
+                console.error(`Could not play sound: ${name}`, e);
             });
         }
     }
