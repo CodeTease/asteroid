@@ -82,11 +82,23 @@ export class AudioManager {
                 throw new Error(`HTTP error! status: ${response.status} for ${fullPath}`);
             }
 
-            // Diagnostic check for SPA fallback issue
-            const contentType = response.headers.get('content-type');
-            if (contentType && contentType.includes('text/html')) {
-                throw new Error(`Server returned HTML instead of audio for ${fullPath}. This is likely due to a misconfigured SPA fallback rule on your hosting service.`);
+            // --- ROBUST DIAGNOSTIC CHECK ---
+            // Clone the response so we can read it twice (once as text, once as buffer)
+            const responseForCheck = response.clone();
+            try {
+                const textContent = await responseForCheck.text();
+                // A definitive check to see if we got an HTML document instead of audio
+                if (textContent.trim().startsWith('<')) {
+                    throw new Error(`Server returned a file that looks like HTML instead of audio for ${fullPath}. This is a classic SPA fallback issue. Please check your hosting configuration to ensure that requests to .mp3 files are not redirected to index.html.`);
+                }
+            } catch (e) {
+                // If it's a real binary file, .text() will fail, which is expected.
+                // We only care about the custom error thrown above.
+                if (e instanceof Error && e.message.startsWith('Server returned')) {
+                    throw e; // Re-throw our specific error to be caught by the outer catch.
+                }
             }
+            // --- END DIAGNOSTIC ---
 
             const arrayBuffer = await response.arrayBuffer();
             // decodeAudioData will throw a specific DOMException if the audio data is invalid/corrupt
