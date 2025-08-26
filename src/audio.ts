@@ -26,73 +26,98 @@ export class AudioManager {
         }
         this.isGameSoundsInitialized = true;
         
-        await Promise.all([
-            this.loadSound('shoot', '/sounds/shoot.mp3', 10),
-            this.loadSound('enemyShoot', '/sounds/enemyShoot.mp3', 10),
-            this.loadSound('finalbossExplosion', '/sounds/finalbossExplosion.mp3', 1),
-            this.loadSound('AIupgraded', '/sounds/AIupgraded.mp3', 3),
-            this.loadSound('enemyDefeated', '/sounds/enemyDefeated.mp3', 15),
-            this.loadSound('finalbossBegin', '/sounds/finalbossBegin.mp3', 1),
-            this.loadSound('finalbossWarning', '/sounds/finalbossWarning.mp3', 1),
-            this.loadSound('laseringSound', '/sounds/laseringSound.mp3', 1, true),
-            this.loadSound('PlayerDead', '/sounds/PlayerDead.mp3', 1),
-            this.loadSound('Playerupgraded', '/sounds/Playerupgraded.mp3', 3),
-        ]);
-    }
-
-    private arrayBufferToBase64(buffer: ArrayBuffer): string {
-        let binary = '';
-        const bytes = new Uint8Array(buffer);
-        const len = bytes.byteLength;
-        for (let i = 0; i < len; i++) {
-            binary += String.fromCharCode(bytes[i]);
-        }
-        return window.btoa(binary);
-    }
-
-    async loadSound(name: string, src: string, poolSize: number = 5, isLooping: boolean = false) {
         try {
-            const response = await fetch(src);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status} for ${src}`);
+             await Promise.all([
+                this.loadSound('shoot', '/sounds/shoot.mp3', 10),
+                this.loadSound('enemyShoot', '/sounds/enemyShoot.mp3', 10),
+                this.loadSound('finalbossExplosion', '/sounds/finalbossExplosion.mp3', 1),
+                this.loadSound('AIupgraded', '/sounds/AIupgraded.mp3', 3),
+                this.loadSound('enemyDefeated', '/sounds/enemyDefeated.mp3', 15),
+                this.loadSound('finalbossBegin', '/sounds/finalbossBegin.mp3', 1),
+                this.loadSound('finalbossWarning', '/sounds/finalbossWarning.mp3', 1),
+                this.loadSound('laseringSound', '/sounds/laseringSound.mp3', 1, true),
+                this.loadSound('PlayerDead', '/sounds/PlayerDead.mp3', 1),
+                this.loadSound('Playerupgraded', '/sounds/Playerupgraded.mp3', 3),
+            ]);
+        } catch (error) {
+            console.error("One or more game sounds failed to load.", error);
+        }
+    }
+
+    private loadSound(name: string, src: string, poolSize: number = 5, isLooping: boolean = false): Promise<void> {
+        return new Promise((resolve, reject) => {
+            // Prevent re-initialization
+            if (this.sounds[name]?.length > 0) {
+                resolve();
+                return;
             }
-            const arrayBuffer = await response.arrayBuffer();
-            const base64String = this.arrayBufferToBase64(arrayBuffer);
-            const dataUrl = `data:audio/mpeg;base64,${base64String}`;
 
             this.sounds[name] = [];
+            let loadedCount = 0;
+            let errorCount = 0;
+
+            const checkCompletion = () => {
+                if (loadedCount + errorCount === poolSize) {
+                    if (errorCount > 0) {
+                        reject(new Error(`${errorCount} instance(s) of sound ${name} failed to load from ${src}.`));
+                    } else {
+                        resolve();
+                    }
+                }
+            };
+
             for (let i = 0; i < poolSize; i++) {
-                const audio = new Audio(dataUrl);
+                const audio = new Audio();
+                
+                const onCanPlayThrough = () => {
+                    loadedCount++;
+                    checkCompletion();
+                };
+
+                const onError = (e: Event) => {
+                    errorCount++;
+                    console.error(`Error loading sound asset: ${name} from ${src}. Event:`, e);
+                    checkCompletion();
+                };
+                
+                audio.addEventListener('canplaythrough', onCanPlayThrough, { once: true });
+                audio.addEventListener('error', onError, { once: true });
+                
                 audio.preload = 'auto';
                 if (isLooping) {
                     audio.loop = true;
                 }
+                audio.src = src; // Set src to trigger loading
+                
                 this.sounds[name].push(audio);
             }
-        } catch (e) {
-            console.error(`Failed to load sound "${name}" from "${src}":`, e);
-        }
+        });
     }
 
     playSound(name: string, volume: number = 1.0) {
-        if (this.isMuted || !this.sounds[name]) return;
+        if (this.isMuted || !this.sounds[name] || this.sounds[name].length === 0) return;
 
         const pool = this.sounds[name];
+        // Find a sound that is not currently playing.
         const sound = pool.find(a => a.paused || a.ended);
 
         if (sound) {
             sound.volume = volume;
             sound.currentTime = 0;
-            sound.play().catch(e => console.error(`Could not play sound: ${name}`, e));
-        } else {
-            console.warn(`Sound pool for "${name}" is full. Consider increasing pool size.`);
+            sound.play().catch(e => {
+                // Don't log the infamous NotSupportedError every time play is attempted.
+                // The loading error is more important.
+                if (e.name !== 'NotSupportedError') { 
+                    console.error(`Could not play sound: ${name}`, e);
+                }
+            });
         }
     }
 
     playLoopingSound(name: string, volume: number = 1.0) {
         if (this.isMuted || !this.sounds[name] || this.activeLoopingSounds[name]) return;
 
-        const sound = this.sounds[name].find(s => s.paused); // Find an available sound
+        const sound = this.sounds[name].find(s => s.paused);
         if (sound) {
             this.activeLoopingSounds[name] = sound;
             sound.volume = volume;
@@ -125,5 +150,4 @@ export class AudioManager {
     }
 }
 
-// Create a singleton instance for global access
 export const audioManager = new AudioManager();
