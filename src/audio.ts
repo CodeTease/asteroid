@@ -46,7 +46,9 @@ export class AudioManager {
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status} for ${src}`);
             }
-            const blob = await response.blob();
+            // Read as ArrayBuffer and explicitly create a Blob with the correct MIME type
+            const arrayBuffer = await response.arrayBuffer();
+            const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
             const objectUrl = URL.createObjectURL(blob);
 
             this.sounds[name] = [];
