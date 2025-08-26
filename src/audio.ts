@@ -3,6 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
+/**
+ * Constructs the correct public path for an asset.
+ * In a Vite project, `import.meta.env.BASE_URL` provides the correct base path,
+ * which is '/' for a root deployment or '/repository-name/' for a GitHub Pages deployment.
+ * @param relativePath The path to the asset relative to the public directory.
+ * @returns The absolute path to the asset.
+ */
+function getAssetPath(relativePath: string): string {
+    // Ensures there's no double slash between the base and the relative path.
+    // FIX: Cast `import.meta` to `any` to access the Vite-specific `env` property
+    return ((import.meta as any).env.BASE_URL + relativePath).replace(/\/+/g, '/');
+}
+
+
 export class AudioManager {
     sounds: { [key: string]: HTMLAudioElement[] } = {};
     activeLoopingSounds: { [key: string]: HTMLAudioElement } = {};
@@ -13,8 +27,6 @@ export class AudioManager {
     constructor() {
         // Initialization is deferred to specific init methods.
     }
-
-
 
     async initMenuMusic() {
         if (this.isMenuMusicInitialized) return;
@@ -53,13 +65,23 @@ export class AudioManager {
             return;
         }
         
+        const fullPath = getAssetPath(src);
+
         try {
             // Fetch the audio file as a blob. This is more reliable for pathing in deployed apps.
-            const response = await fetch(src);
+            const response = await fetch(fullPath);
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status} for ${src}`);
+                console.error(`Failed to fetch sound '${name}' at '${fullPath}'. Status: ${response.status}. Content-Type: ${response.headers.get('Content-Type')}`);
+                throw new Error(`HTTP error! status: ${response.status} for ${fullPath}`);
             }
             const originalBlob = await response.blob();
+
+             // Check if the fetched content is likely HTML, which would indicate a server routing issue.
+            if (originalBlob.type.includes('html')) {
+                 console.error(`Fetched resource for sound '${name}' at '${fullPath}' seems to be an HTML file, not audio. This is likely a server misconfiguration for SPA routing.`);
+                 throw new Error(`Invalid content type for audio file: ${originalBlob.type}`);
+            }
+
             // Re-create the blob with the correct MIME type to fix "no supported sources" error.
             const typedBlob = new Blob([originalBlob], { type: 'audio/mpeg' });
             // Create an in-memory URL for the blob.
@@ -75,7 +97,7 @@ export class AudioManager {
                 this.sounds[name].push(audio);
             }
         } catch (e) {
-            console.error(`Failed to load sound "${name}" from "${src}":`, e);
+            console.error(`Failed to load sound "${name}" from "${fullPath}":`, e);
             // Propagate the error to stop Promise.all if needed
             throw e;
         }
