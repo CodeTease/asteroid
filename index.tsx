@@ -102,9 +102,11 @@ window.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         if (e.touches.length > 0 && game.player) {
             const touch = e.touches[0];
-            const rect = UI.canvas.getBoundingClientRect();
+            // Fix: Cast UI.canvas to HTMLCanvasElement to access its width property.
+            const canvas = UI.canvas as HTMLCanvasElement;
+            const rect = canvas.getBoundingClientRect();
             const touchX = touch.clientX - rect.left;
-            game.player.x = Math.max(game.player.size, Math.min(UI.canvas.width - game.player.size, touchX));
+            game.player.x = Math.max(game.player.size, Math.min(canvas.width - game.player.size, touchX));
         }
     }
 
@@ -146,7 +148,8 @@ window.addEventListener('DOMContentLoaded', () => {
         game.updateUpgradeModalUI();
     });
     UI.autoUpgradeCheckbox.addEventListener('change', () => {
-        game.isAutoUpgradeEnabled = UI.autoUpgradeCheckbox.checked;
+        // Fix: Cast UI.autoUpgradeCheckbox to HTMLInputElement to access 'checked' property.
+        game.isAutoUpgradeEnabled = (UI.autoUpgradeCheckbox as HTMLInputElement).checked;
     });
 
 });
