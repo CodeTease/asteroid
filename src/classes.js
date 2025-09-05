@@ -5,11 +5,6 @@ import { audioManager } from "./audio.js";
 // --- GAME CLASSES ---
 
 export class Player {
-    x: number; y: number; size: number; speed: number;
-    projectileSize: number; projectileDamage: number; fireRate: number;
-    alpha: number; allies: AIAlly[]; lastX: number; isDestroyed: boolean;
-    shieldCharges: number;
-
     constructor() {
         this.x = canvas.width / 2;
         this.y = canvas.height - 40;
@@ -69,13 +64,13 @@ export class Player {
         ctx.restore();
     }
 
-    update(game: Game, dt: number) {
+    update(game, dt) {
         const moveSpeed = this.speed * 60 * dt;
         if ((game.keys['ArrowLeft'] || game.keys['a']) && this.x > this.size) this.x -= moveSpeed;
         if ((game.keys['ArrowRight'] || game.keys['d']) && this.x < canvas.width - this.size) this.x += moveSpeed;
     }
 
-    shoot(game: Game) {
+    shoot(game) {
         if (game.isGameOver || game.isPaused) return;
         audioManager.playSound('shoot', 0.5);
         if (this.fireRate === 2) {
@@ -88,9 +83,7 @@ export class Player {
 }
 
 export class Projectile {
-    x: number; y: number; size: number; damage: number;
-    vx: number; vy: number; color: string;
-    constructor(x: number, y: number, options: { size?: number, damage?: number, vx?: number, vy?: number, color?: string } = {}) {
+    constructor(x, y, options = {}) {
         this.x = x;
         this.y = y;
         this.size = options.size ?? 5;
@@ -108,7 +101,7 @@ export class Projectile {
         ctx.shadowBlur = 0;
     }
 
-    update(game: Game, dt: number) {
+    update(game, dt) {
         const moveFactor = 60 * dt;
         this.x += this.vx * moveFactor;
         this.y += this.vy * moveFactor;
@@ -116,8 +109,7 @@ export class Projectile {
 }
 
 export class AIAlly extends Player {
-    side: 'left' | 'right'; fireCooldown: number; lastFireTime: number; isRetreating: boolean;
-    constructor(side: 'left' | 'right') {
+    constructor(side) {
         super();
         this.side = side;
         this.size *= 0.7;
@@ -145,7 +137,7 @@ export class AIAlly extends Player {
         ctx.restore();
     }
 
-    update(game: Game, dt: number) {
+    update(game, dt) {
         if (this.isRetreating) {
             this.y -= this.speed * 60 * dt;
             return;
@@ -160,7 +152,7 @@ export class AIAlly extends Player {
         this.fireCooldown = fireCooldowns[game.allyUpgrades.fireRateLevel];
 
         if (!game.isGameOver && Date.now() - this.lastFireTime > this.fireCooldown) {
-            let bestTarget: Asteroid | FinalBoss | null = null;
+            let bestTarget = null;
 
             if (game.isFinalBossActive && game.finalBoss) {
                 const miniBosses = game.asteroids.filter(a => a.isBoss && a !== game.finalBoss);
@@ -194,14 +186,14 @@ export class AIAlly extends Player {
         }
     }
 
-    shootAt(game: Game, target: Asteroid | FinalBoss) {
+    shootAt(game, target) {
         audioManager.playSound('shoot', 0.2);
         const dx = target.x - this.x;
         const dy = target.y - this.y;
         const dist = Math.hypot(dx, dy);
         const baseSpeed = 8;
         const speed = game.allyUpgrades.hasFasterProjectiles ? baseSpeed * 1.5 : baseSpeed;
-        const projectileOptions: { size: number, damage: number, vx?: number, vy?: number } = { size: this.projectileSize, damage: this.projectileDamage };
+        const projectileOptions = { size: this.projectileSize, damage: this.projectileDamage };
 
         if (game.allyUpgrades.hasDoubleShot) {
             const angle = Math.atan2(dy, dx);
@@ -221,11 +213,6 @@ export class AIAlly extends Player {
 }
 
 export class LaserAlly extends Player {
-    isRetreating: boolean; isFiring: boolean;
-    laserTarget: { x: number, y: number } | null;
-    lastFireStopTime: number; fireDuration: number; cooldownDuration: number;
-    laserDamage: number; // Now represents Damage Per Second
-
     constructor() {
         super();
         this.size *= 2; // Much larger
@@ -303,7 +290,7 @@ export class LaserAlly extends Player {
         ctx.restore();
     }
 
-    update(game: Game, dt: number) {
+    update(game, dt) {
         if (this.isRetreating) {
             this.y -= 1 * 60 * dt;
             if (this.isFiring) {
@@ -337,7 +324,7 @@ export class LaserAlly extends Player {
         }
 
         if (this.isFiring) {
-            let bestTarget: Asteroid | FinalBoss | null = null;
+            let bestTarget = null;
             if (game.isFinalBossActive && game.finalBoss) {
                 bestTarget = game.finalBoss;
             } else {
@@ -360,7 +347,7 @@ export class LaserAlly extends Player {
         }
     }
 
-    applyUpgrades(game: Game) {
+    applyUpgrades(game) {
         const damageLevels = [20, 25, 32, 40, 50, 65]; // Damage Per Second
         const cooldownLevels = [15000, 14000, 13000, 11500, 10000, 8000];
         this.laserDamage = damageLevels[game.allyUpgrades.laserDamageLevel];
@@ -368,23 +355,8 @@ export class LaserAlly extends Player {
     }
 }
 
-export type AsteroidType = 'standard' | 'scout' | 'brute' | 'shard' | 'shooter' | 'splitter' | 'boss';
-
-interface AsteroidOptions {
-    isBoss?: boolean;
-    type?: AsteroidType;
-    x?: number;
-    y?: number;
-    size?: number;
-    healthOverride?: number;
-}
-
 export class Asteroid {
-    isBoss: boolean; type: AsteroidType; x: number; y: number; vx: number; speed: number;
-    size: number; health: number; color: string; shape: { x: number, y: number }[];
-    fireCooldown: number; lastFireTime: number;
-
-    constructor(game: Game, options: AsteroidOptions = {}) {
+    constructor(game, options = {}) {
         this.isBoss = options.isBoss ?? false;
         this.x = options.x ?? Math.random() * canvas.width;
         this.y = options.y ?? -50;
@@ -485,7 +457,7 @@ export class Asteroid {
             ctx.fillText(Math.ceil(this.health).toString(), this.x, this.y + 5);
         }
     }
-    update(game: Game, dt: number) {
+    update(game, dt) {
         const moveFactor = 60 * dt;
         this.y += this.speed * moveFactor;
         this.x += this.vx * moveFactor;
@@ -507,14 +479,8 @@ export class Asteroid {
     }
 }
 
-type FinalBossAttack = 'barrage' | 'dash' | 'summonMinions' | 'summonCommanders';
-
 export class FinalBoss extends Asteroid {
-    maxHealth: number; currentAttack: FinalBossAttack; attackCooldown: number; lastAttackTime: number;
-    dashTarget: { x: number, y: number } | null; isWarning: boolean; warningTime: number;
-    isDefeated: boolean; isReturning: boolean; initialY: number; isEntering: boolean;
-
-    constructor(game: Game) {
+    constructor(game) {
         super(game, { isBoss: true });
         this.size = 100;
         this.x = canvas.width / 2;
@@ -558,7 +524,7 @@ export class FinalBoss extends Asteroid {
         super.draw();
     }
 
-    update(game: Game, dt: number) {
+    update(game, dt) {
         const moveFactor = 60 * dt;
         // Entrance Animation
         if (this.isEntering) {
@@ -615,7 +581,7 @@ export class FinalBoss extends Asteroid {
         }
     }
 
-    chooseAndPerformAttack(game: Game) {
+    chooseAndPerformAttack(game) {
         const rand = Math.random();
         if (rand < 0.5) { // 50% chance
             this.performAttack(game, 'summonMinions');
@@ -632,7 +598,7 @@ export class FinalBoss extends Asteroid {
         }
     }
 
-    performAttack(game: Game, attack: FinalBossAttack) {
+    performAttack(game, attack) {
         switch (attack) {
             case 'summonMinions':
                 game.updateGameStatus('Boss triệu hồi quái!');
@@ -670,9 +636,7 @@ export class FinalBoss extends Asteroid {
 }
 
 export class Particle {
-    x: number; y: number; vx: number; vy: number; radius: number;
-    color: string; life: number; maxLife: number;
-    constructor(x: number, y: number, color: string) {
+    constructor(x, y, color) {
         this.x = x;
         this.y = y;
         this.radius = Math.random() * 3 + 1;
@@ -693,7 +657,7 @@ export class Particle {
         ctx.restore();
     }
 
-    update(game: Game, dt: number) {
+    update(game, dt) {
         const moveFactor = 60 * dt;
         this.x += this.vx * moveFactor;
         this.y += this.vy * moveFactor;

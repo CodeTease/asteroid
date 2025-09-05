@@ -4,16 +4,16 @@
 */
 
 export class AudioManager {
-    private audioContext: AudioContext | null = null;
-    private decodedBuffers: { [key: string]: AudioBuffer } = {};
-    private activeLoopingSources: { [key: string]: AudioBufferSourceNode } = {};
-    isMuted: boolean = false;
-    private isGameSoundsInitialized: boolean = false;
-    private isMenuMusicInitialized: boolean = false;
+    audioContext = null;
+    decodedBuffers = {};
+    activeLoopingSources = {};
+    isMuted = false;
+    isGameSoundsInitialized = false;
+    isMenuMusicInitialized = false;
 
     // --- SOLUTION: Use absolute URLs from a reliable CDN (ImageKit) ---
     // This bypasses any server-side routing issues (SPA fallback) on the deployment platform.
-    private soundSources: Record<string, string> = {
+    soundSources = {
         'menuMusic': 'https://ik.imagekit.io/irammini/sounds/menuMusic.mp3',
         'shoot': 'https://ik.imagekit.io/irammini/sounds/shoot.mp3',
         'enemyShoot': 'https://ik.imagekit.io/irammini/sounds/enemyShoot.mp3',
@@ -31,7 +31,7 @@ export class AudioManager {
         // Defer context creation to a user interaction
     }
 
-    private async initAudioContext() {
+    async initAudioContext() {
         if (this.audioContext) {
             if (this.audioContext.state === 'suspended') {
                 await this.audioContext.resume();
@@ -39,7 +39,7 @@ export class AudioManager {
             return;
         }
         try {
-            this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
         } catch (e) {
             console.error('Web Audio API is not supported in this browser', e);
             alert('Web Audio API is not supported in this browser. Sound will not work.');
@@ -72,7 +72,7 @@ export class AudioManager {
         }
     }
 
-    private async loadSound(name: string): Promise<void> {
+    async loadSound(name) {
         if (!this.audioContext) {
              throw new Error("AudioContext not initialized. Cannot load sound.");
         }
@@ -109,7 +109,7 @@ export class AudioManager {
         }
     }
 
-    playSound(name: string, volume: number = 1.0) {
+    playSound(name, volume = 1.0) {
         if (this.isMuted || !this.decodedBuffers[name] || !this.audioContext) return;
 
         const source = this.audioContext.createBufferSource();
@@ -124,7 +124,7 @@ export class AudioManager {
         source.start(0);
     }
 
-    playLoopingSound(name: string, volume: number = 1.0) {
+    playLoopingSound(name, volume = 1.0) {
         if (this.isMuted || !this.decodedBuffers[name] || this.activeLoopingSources[name] || !this.audioContext) return;
 
         const source = this.audioContext.createBufferSource();
@@ -141,7 +141,7 @@ export class AudioManager {
         this.activeLoopingSources[name] = source;
     }
 
-    stopLoopingSound(name: string) {
+    stopLoopingSound(name) {
         const source = this.activeLoopingSources[name];
         if (source) {
             try {

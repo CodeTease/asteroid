@@ -2,48 +2,39 @@ import * as UI from './ui.js';
 import { Player, Projectile, AIAlly, LaserAlly, Asteroid, FinalBoss, Particle } from './classes.js';
 import { audioManager } from './audio.js';
 
-type AllyUpgradeType = 'firerate' | 'doubleshot' | 'projectilespeed' | 'laserDamage' | 'laserCooldown';
-
 export class Game {
-    // Game State Variables
-    player: Player;
-    projectiles: Projectile[];
-    enemyProjectiles: Projectile[];
-    asteroids: Asteroid[];
-    particles: Particle[];
-    score: number;
-    gameTime: number;
-    deltaTime: number;
-    lastTime: number;
-    nextBossTime: number;
-    lastSpawnTime: number;
-    nextShieldScore: number;
-    upgradePoints: number;
-    allyUpgrades: {
-        fireRateLevel: number;
-        hasDoubleShot: boolean;
-        hasFasterProjectiles: boolean;
-        laserDamageLevel: number;
-        laserCooldownLevel: number;
-    };
-    laserAlly: LaserAlly | null;
-    finalBoss: FinalBoss | null;
-    isBossActive: boolean;
-    isFinalBossActive: boolean;
-    isGameOver: boolean;
-    isPaused: boolean;
-    isAutoUpgradeEnabled: boolean;
-    finalBossWarningShown: boolean;
-    finalBossDefeated: boolean;
-    animationFrameId: number;
-    screenShakeDuration: number;
-    screenShakeIntensity: number;
-    flashDuration: number;
-    private statusMessageTimeout: number | null = null;
-    keys: Record<string, boolean> = {};
-
     constructor() {
         this.animationFrameId = 0;
+        this.keys = {};
+
+        // Game State Variables moved from class properties to constructor
+        this.player = null;
+        this.projectiles = [];
+        this.enemyProjectiles = [];
+        this.asteroids = [];
+        this.particles = [];
+        this.score = 0;
+        this.gameTime = 0;
+        this.deltaTime = 0;
+        this.lastTime = 0;
+        this.nextBossTime = 0;
+        this.lastSpawnTime = 0;
+        this.nextShieldScore = 0;
+        this.upgradePoints = 0;
+        this.allyUpgrades = {};
+        this.laserAlly = null;
+        this.finalBoss = null;
+        this.isBossActive = false;
+        this.isFinalBossActive = false;
+        this.isGameOver = false;
+        this.isPaused = false;
+        this.isAutoUpgradeEnabled = false;
+        this.finalBossWarningShown = false;
+        this.finalBossDefeated = false;
+        this.screenShakeDuration = 0;
+        this.screenShakeIntensity = 0;
+        this.flashDuration = 0;
+        this.statusMessageTimeout = null;
     }
 
     start() {
@@ -102,7 +93,7 @@ export class Game {
         UI.finalBossHealthContainer.style.display = 'none';
     }
 
-    gameLoop(currentTime: number) {
+    gameLoop(currentTime) {
         let deltaTime = (currentTime - this.lastTime) / 1000;
         this.lastTime = currentTime;
         
@@ -122,7 +113,7 @@ export class Game {
         this.animationFrameId = requestAnimationFrame((t) => this.gameLoop(t));
     }
     
-    update(dt: number) {
+    update(dt) {
         if (!this.isGameOver) {
             this.gameTime += dt;
             this.handleSpawning();
@@ -232,7 +223,7 @@ export class Game {
         }
     }
 
-    spawnBoss(isFinal: boolean) {
+    spawnBoss(isFinal) {
         if (isFinal) {
             this.isFinalBossActive = true;
             this.isBossActive = false;
@@ -305,7 +296,7 @@ export class Game {
         }
     }
 
-    handleAsteroidDestruction(asteroid: Asteroid, index: number) {
+    handleAsteroidDestruction(asteroid, index) {
         if (asteroid === this.finalBoss) {
             if (this.finalBoss && !this.finalBoss.isDefeated) {
                 audioManager.playSound('finalbossExplosion', 1.0);
@@ -349,7 +340,7 @@ export class Game {
         UI.updateUpgradePoints(this.upgradePoints);
     }
 
-    handleGameOver(reason: string) {
+    handleGameOver(reason) {
         if (this.isGameOver) return;
         this.isGameOver = true;
         
@@ -370,7 +361,7 @@ export class Game {
         UI.showMessage("Trò chơi kết thúc!", `${reason} Điểm của bạn: ${this.score}`);
     }
 
-    checkCollision(obj1: any, obj2: any): boolean {
+    checkCollision(obj1, obj2) {
         if (!obj1 || !obj2 || (obj1 instanceof Player && obj1.isDestroyed)) return false;
         const dx = obj1.x - obj2.x;
         const dy = obj1.y - obj2.y;
@@ -379,13 +370,13 @@ export class Game {
         return distance < collisionDistance;
     }
 
-    createExplosion(x: number, y: number, color: string, count = 20) {
+    createExplosion(x, y, color, count = 20) {
         for (let i = 0; i < count; i++) {
             this.particles.push(new Particle(x, y, color));
         }
     }
 
-    triggerAllyUpgradeEffect(ally: AIAlly | LaserAlly) {
+    triggerAllyUpgradeEffect(ally) {
         this.createExplosion(ally.x, ally.y, '#ffd700', 30);
     }
 
@@ -428,7 +419,7 @@ export class Game {
         UI.updateUpgradePoints(this.upgradePoints);
     }
 
-    updateGameStatus(text: string, autoFade: boolean = true) {
+    updateGameStatus(text, autoFade = true) {
         if (this.statusMessageTimeout) {
             clearTimeout(this.statusMessageTimeout);
         }
@@ -438,7 +429,7 @@ export class Game {
         if (autoFade) {
             this.statusMessageTimeout = setTimeout(() => {
                 UI.gameStatus.style.opacity = '0';
-            }, 2500) as unknown as number;
+            }, 2500);
         }
     }
 
@@ -469,7 +460,7 @@ export class Game {
         UI.updateUpgradeModal(this.upgradePoints, this.allyUpgrades, !!this.laserAlly);
     }
 
-    areAllUpgradesMaxed(): boolean {
+    areAllUpgradesMaxed() {
         return this.allyUpgrades.fireRateLevel >= 5 &&
                this.allyUpgrades.hasDoubleShot &&
                this.allyUpgrades.hasFasterProjectiles &&
@@ -495,7 +486,7 @@ export class Game {
         }
     }
     
-    upgradeAlly(type: AllyUpgradeType) {
+    upgradeAlly(type) {
         let cost = 0;
         switch (type) {
             case 'firerate': cost = 1; if (this.allyUpgrades.fireRateLevel < 5) { this.upgradePoints -= cost; this.allyUpgrades.fireRateLevel++; } break;
