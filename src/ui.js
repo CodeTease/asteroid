@@ -15,6 +15,7 @@ export const scoreDisplay = document.getElementById('score');
 export const shieldDisplay = document.getElementById('shields');
 export const gameStatus = document.getElementById('game-status');
 export const timerDisplay = document.getElementById('timer');
+export const timerLabel = document.getElementById('timer-label');
 export const upgradePointsDisplay = document.getElementById('upgrade-points');
 export const upgradeModal = document.getElementById('upgrade-modal');
 export const upgradePointsCount = document.getElementById('upgrade-points-count');

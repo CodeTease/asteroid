@@ -16,6 +16,7 @@ export class Player {
         this.alpha = 1;
         this.allies = [];
         this.lastX = this.x;
+        this.vx = 0; // Added for Juggler push effect
         this.isDestroyed = false;
         this.shieldCharges = 0;
         
@@ -88,9 +89,24 @@ export class Player {
         if ((game.keys['ArrowLeft'] || game.keys['a']) && this.x > this.size) this.x -= moveSpeed;
         if ((game.keys['ArrowRight'] || game.keys['d']) && this.x < canvas.width - this.size) this.x += moveSpeed;
 
+        // Apply Velocity (Juggler Push)
+        if (this.vx !== 0) {
+            this.x += this.vx * 60 * dt;
+            this.vx *= 0.9; // Friction to slow down push
+            if (Math.abs(this.vx) < 0.1) this.vx = 0;
+
+            // Boundary checks for push
+            if (this.x < this.size) this.x = this.size;
+            if (this.x > canvas.width - this.size) this.x = canvas.width - this.size;
+        }
+
         // Heat Decay
         if (!this.isOverheated && this.heat > 0) {
-            this.heat -= 40 * dt; // Decay speed
+            // Check for Sizzler
+            const hasSizzler = game.asteroids.some(a => a.type === 'sizzler');
+            const decayRate = hasSizzler ? 20 : 40; // 50% reduced decay if Sizzler present
+
+            this.heat -= decayRate * dt; // Decay speed
             if (this.heat < 0) this.heat = 0;
         }
     }
@@ -100,7 +116,11 @@ export class Player {
 
         // Heat Build-up
         if (game.isAimUnlocked) {
-            this.heat += 10;
+            // Check for Sizzler
+            const hasSizzler = game.asteroids.some(a => a.type === 'sizzler');
+            const heatGen = hasSizzler ? 12 : 10; // 20% increased heat generation if Sizzler present
+
+            this.heat += heatGen;
             if (this.heat >= this.maxHeat) {
                 this.heat = this.maxHeat;
                 this.isOverheated = true;
@@ -532,6 +552,10 @@ export class Asteroid {
         this.baseX = this.x;
         this.weaverTime = 0;
 
+        // Anchor specific
+        this.anchorTarget = null;
+        this.protectedBy = null;
+
         if (this.isBoss) {
             this.type = 'boss';
         } else if (options.type) {
@@ -561,6 +585,16 @@ export class Asteroid {
             case 'bulwark': // VOID LEGION
                 this.size = 40; this.speed = 0.5; this.health = 10 * healthMultiplier; this.color = '#444'; // Dark Grey
                 break;
+            case 'sizzler': // NEW VOID LEGION
+                this.size = 50; this.speed = 0.5; this.health = 25 * healthMultiplier; this.color = '#ff6600'; // Orange
+                break;
+            case 'juggler': // NEW VOID LEGION
+                this.size = 25; this.speed = 2.5; this.health = 4 * healthMultiplier; this.color = '#00ff00'; // Green
+                this.pushRadius = 200;
+                break;
+            case 'anchor': // NEW VOID LEGION
+                this.size = 15; this.speed = 4; this.health = 3 * healthMultiplier; this.color = '#ffffff'; // White
+                break;
             // ... (Existing types kept same) ...
             case 'scout': this.size = 12; this.speed = Math.random() * 2 + 2.5; this.health = 1 * healthMultiplier; this.color = '#add8e6'; break;
             case 'brute': this.size = 35; this.speed = Math.random() * 1 + 0.8; this.health = 2 * healthMultiplier; this.color = '#d2b48c'; break;
@@ -571,6 +605,8 @@ export class Asteroid {
             case 'teleporter': this.size = 28; this.speed = 0.2; this.health = 3 * healthMultiplier; this.color = '#00ffcc'; this.fireCooldown = 1500; break;
             case 'standard': default: this.size = options.size ?? (Math.random() * 20 + 15); this.speed = Math.random() * 2 + 1; this.health = 1 * healthMultiplier; this.color = '#a9a9a9'; break;
         }
+
+        this.maxHealth = this.health; // Set Max Health
 
         // --- RANDOMIZED SHAPE GENERATION ---
         this.shape = [];
@@ -588,6 +624,15 @@ export class Asteroid {
         } else if (this.type === 'orbiter') {
             sides = 6; // Hexagon-ish
             jaggedness = 0.2; // Techy
+        } else if (this.type === 'sizzler') {
+            sides = 4; // Rectangle
+            jaggedness = 0.0;
+        } else if (this.type === 'juggler') {
+            sides = 8;
+            jaggedness = 0.3;
+        } else if (this.type === 'anchor') {
+            sides = 4; // Diamond/Cross
+            jaggedness = 0.5;
         }
 
         for (let i = 0; i < sides; i++) {
@@ -651,6 +696,29 @@ export class Asteroid {
 
         ctx.restore();
         
+        // Anchor Line
+        if (this.type === 'anchor' && this.anchorTarget) {
+            ctx.save();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(this.x, this.y);
+            ctx.lineTo(this.anchorTarget.x, this.anchorTarget.y);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // Protected Icon
+        if (this.protectedBy) {
+            ctx.save();
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '20px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText("🛡️", this.x, this.y - this.size - 10);
+            ctx.restore();
+        }
+
         // Health Text
         if (this.health > 1) {
             ctx.fillStyle = 'white';
@@ -700,6 +768,98 @@ export class Asteroid {
 
         } else if (this.type === 'bulwark') {
             this.y += this.speed * moveFactor; // Slow march
+
+        } else if (this.type === 'sizzler') {
+            this.y += this.speed * moveFactor; // Straight line, slow
+
+        } else if (this.type === 'juggler') {
+            if (game.player && !game.player.isDestroyed) {
+                const dx = game.player.x - this.x;
+                const dy = game.player.y - this.y;
+                const dist = Math.hypot(dx, dy);
+
+                // Movement Logic: Maintain 150px distance
+                const targetDist = 150;
+                if (dist > targetDist + 10) {
+                    this.x += (dx / dist) * this.speed * moveFactor;
+                    this.y += (dy / dist) * this.speed * moveFactor;
+                } else if (dist < targetDist - 10) {
+                    this.x -= (dx / dist) * this.speed * moveFactor;
+                    this.y -= (dy / dist) * this.speed * moveFactor;
+                } else {
+                    // Orbit slightly if at sweet spot
+                     this.x += Math.sin(Date.now() / 500) * this.speed * moveFactor;
+                }
+
+                // Push Logic
+                if (dist < this.pushRadius) {
+                    // Draw force field effect
+                    ctx.save();
+                    ctx.strokeStyle = 'rgba(0, 255, 0, 0.3)';
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.pushRadius, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.restore();
+
+                    // Push player
+                    // Direction is random or away. Requirement says: "random direction or push away".
+                    // Let's do random for more chaos as per "Juggler" name.
+                    if (Math.random() < 0.1) {
+                         const pushForce = (Math.random() - 0.5) * 5; // Random left/right push
+                         game.player.vx += pushForce;
+                    }
+                }
+            } else {
+                 this.y += this.speed * moveFactor;
+            }
+
+        } else if (this.type === 'anchor') {
+            // Find target if none
+            if (!this.anchorTarget || this.anchorTarget.health <= 0 || !game.asteroids.includes(this.anchorTarget)) {
+                this.anchorTarget = null;
+                // Look for big enemies
+                const potentialTargets = game.asteroids.filter(a =>
+                    (a.type === 'bulwark' || a.type === 'brute' || a.type === 'sizzler') &&
+                    a !== this && !a.protectedBy
+                );
+
+                if (potentialTargets.length > 0) {
+                    // Pick closest
+                    let minD = Infinity;
+                    for (const t of potentialTargets) {
+                        const d = Math.hypot(this.x - t.x, this.y - t.y);
+                        if (d < minD) {
+                            minD = d;
+                            this.anchorTarget = t;
+                        }
+                    }
+                }
+            }
+
+            if (this.anchorTarget) {
+                this.anchorTarget.protectedBy = this;
+                // Orbit/Follow Logic
+                const dx = this.anchorTarget.x - this.x;
+                const dy = this.anchorTarget.y - this.y;
+                const dist = Math.hypot(dx, dy);
+                const desiredDist = this.anchorTarget.size + 40;
+
+                if (dist > desiredDist + 5) {
+                    this.x += (dx / dist) * this.speed * 1.5 * moveFactor; // Catch up fast
+                    this.y += (dy / dist) * this.speed * 1.5 * moveFactor;
+                } else if (dist < desiredDist - 5) {
+                    this.x -= (dx / dist) * this.speed * moveFactor;
+                    this.y -= (dy / dist) * this.speed * moveFactor;
+                } else {
+                    // Orbit
+                    const angle = Math.atan2(dy, dx) + (0.05 * moveFactor);
+                    this.x = this.anchorTarget.x - Math.cos(angle) * desiredDist;
+                    this.y = this.anchorTarget.y - Math.sin(angle) * desiredDist;
+                }
+            } else {
+                // No target, just move down
+                this.y += this.speed * moveFactor;
+            }
 
         } else if (this.type === 'seeker') {
              if (game.player && !game.player.isDestroyed) {

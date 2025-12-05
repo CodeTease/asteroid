@@ -102,6 +102,7 @@ export class Game {
         this.updateGameStatus('Ready', false);
         UI.finalBossHealthContainer.style.display = 'none';
         UI.heatGroup.style.display = 'none'; // Hide heat bar initially
+        UI.timerLabel.innerText = "⏱️"; // Reset timer label
     }
 
     gameLoop(currentTime) {
@@ -244,6 +245,12 @@ export class Game {
                     this.asteroids.push(new Asteroid(this, { type: 'bulwark' }));
                 } else if (rand < 0.65) {
                      this.asteroids.push(new Asteroid(this, { type: 'teleporter' }));
+                } else if (rand < 0.70) {
+                     this.asteroids.push(new Asteroid(this, { type: 'sizzler' }));
+                } else if (rand < 0.75) {
+                     this.asteroids.push(new Asteroid(this, { type: 'juggler' }));
+                } else if (rand < 0.80) {
+                     this.asteroids.push(new Asteroid(this, { type: 'anchor' }));
                 } else {
                     this.asteroids.push(new Asteroid(this));
                 }
@@ -363,6 +370,13 @@ export class Game {
 
                     this.createExplosion(asteroid.x, asteroid.y, asteroid.color, 5);
                     asteroid.health -= this.projectiles[i].damage;
+
+                    // ANCHOR PROTECTION LOGIC
+                    if (asteroid.protectedBy && asteroid.health <= 1) {
+                         asteroid.health = 1;
+                         this.createExplosion(asteroid.x, asteroid.y, '#ffffff', 2); // White shield sparks
+                    }
+
                     this.projectiles.splice(i, 1);
                     hitSomething = true;
                     break;
@@ -387,6 +401,10 @@ export class Game {
                 this.updateGameStatus('FINAL BOSS DEFEATED! VOID MODE UNLOCKED!');
                 UI.heatGroup.style.display = 'flex'; // Show Heat Bar
                 
+                // VOID TIME RESET
+                this.gameTime = 0;
+                UI.timerLabel.innerText = "Void Time";
+
                 this.upgradePoints += 10;
                 this.player.shieldCharges += 5;
                 this.screenShakeDuration = 60;
@@ -407,6 +425,20 @@ export class Game {
             this.createExplosion(asteroid.x, asteroid.y, asteroid.color, asteroid.size);
             this.asteroids.splice(index, 1);
             
+            // ANCHOR DEATH LOGIC
+            if (asteroid.type === 'anchor' && asteroid.anchorTarget) {
+                 const target = asteroid.anchorTarget;
+                 if (target && this.asteroids.includes(target)) {
+                     target.protectedBy = null;
+                     // Request: "lose 50% max HP immediately"
+                     const damage = target.maxHealth * 0.5;
+                     target.health -= damage;
+
+                     this.createExplosion(target.x, target.y, '#ff0000', 20); // Big red hit
+                     this.updateGameStatus("Anchor Destroyed! Shield Down!");
+                 }
+            }
+
             // Drop Coolant (10% chance from Void Enemies)
             if (['orbiter', 'weaver', 'bulwark'].includes(asteroid.type) && Math.random() < 0.1) {
                 this.coolants.push(new Coolant(asteroid.x, asteroid.y));
