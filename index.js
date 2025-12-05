@@ -3,11 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import { Game } from './src/game.js';
+import { Asteroid } from './src/classes.js';
 import * as UI from './src/ui.js';
 import { audioManager } from './src/audio.js';
 
 window.addEventListener('DOMContentLoaded', () => {
     const game = new Game();
+    window.game = game; // Expose for console debugging if needed
 
     // Play menu music on first user interaction
     const playMenuMusicOnFirstInteraction = async () => {
@@ -165,4 +167,48 @@ window.addEventListener('DOMContentLoaded', () => {
         game.isAutoUpgradeEnabled = UI.autoUpgradeCheckbox.checked;
     });
 
+    // --- DEBUG PANEL LISTENERS ---
+    const debugPanel = document.getElementById('debug-panel');
+    const debugToggle = document.getElementById('debug-toggle');
+    const debugClose = document.getElementById('debug-close');
+    const debugTimePlus = document.getElementById('debug-time-plus');
+    const debugSummonBoss = document.getElementById('debug-summon-boss');
+    const debugSpawnEnemy = document.getElementById('debug-spawn-enemy');
+    const debugEnemySelect = document.getElementById('debug-enemy-select');
+    const debugAddScore = document.getElementById('debug-add-score');
+    const debugGodMode = document.getElementById('debug-god-mode');
+
+    debugToggle.addEventListener('click', () => {
+        debugPanel.classList.toggle('hidden');
+    });
+
+    debugClose.addEventListener('click', () => {
+        debugPanel.classList.add('hidden');
+    });
+
+    debugTimePlus.addEventListener('click', () => {
+        game.gameTime += 60;
+        game.updateHUD();
+    });
+
+    debugSummonBoss.addEventListener('click', () => {
+        if (!game.isFinalBossActive) {
+            game.spawnBoss(true);
+        }
+    });
+
+    debugSpawnEnemy.addEventListener('click', () => {
+        const type = debugEnemySelect.value;
+        game.asteroids.push(new Asteroid(game, { type: type, y: -50 }));
+    });
+
+    debugAddScore.addEventListener('click', () => {
+        game.score += 1000;
+        game.upgradePoints += 10;
+        game.updateHUD();
+    });
+
+    debugGodMode.addEventListener('change', () => {
+        game.godMode = debugGodMode.checked;
+    });
 });

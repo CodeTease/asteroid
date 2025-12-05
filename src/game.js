@@ -41,6 +41,7 @@ export class Game {
         // Aim Mode
         this.isAimUnlocked = false;
         this.mousePos = { x: 0, y: 0 };
+        this.godMode = false; // Debug
     }
 
     start() {
@@ -380,6 +381,8 @@ export class Game {
             if (this.isGameOver) break;
             const asteroid = this.asteroids[j];
             if (this.checkCollision(this.player, asteroid)) {
+                if (this.godMode) return; // God Mode Check
+
                 if (this.player.shieldCharges > 0) {
                     if (asteroid.isBoss) {
                         this.player.shieldCharges = 0;
@@ -399,6 +402,8 @@ export class Game {
         for (let j = this.enemyProjectiles.length - 1; j >= 0; j--) {
             const p = this.enemyProjectiles[j];
             if (this.checkCollision(this.player, p)) {
+                if (this.godMode) return; // God Mode Check
+
                 if (this.player.shieldCharges > 0) {
                     this.player.shieldCharges--;
                     this.createExplosion(p.x, p.y, '#00e5ff', 20);

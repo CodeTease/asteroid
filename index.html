@@ -34,6 +34,35 @@
     </div>
 
     <div class="game-area" id="game-area">
+        <div id="debug-panel" class="hidden">
+            <h3>Debug Panel</h3>
+            <button id="debug-time-plus">+60s Time</button>
+            <button id="debug-summon-boss">Summon Boss</button>
+            <div class="debug-row">
+                <select id="debug-enemy-select">
+                    <option value="standard">Standard</option>
+                    <option value="scout">Scout</option>
+                    <option value="brute">Brute</option>
+                    <option value="shard">Shard</option>
+                    <option value="shooter">Shooter</option>
+                    <option value="splitter">Splitter</option>
+                    <option value="seeker">Seeker</option>
+                    <option value="teleporter">Teleporter</option>
+                    <option value="orbiter">Orbiter</option>
+                    <option value="weaver">Weaver</option>
+                    <option value="bulwark">Bulwark</option>
+                    <option value="juggler">Juggler</option>
+                    <option value="sizzler">Sizzler</option>
+                    <option value="anchor">Anchor</option>
+                </select>
+                <button id="debug-spawn-enemy">Spawn</button>
+            </div>
+            <button id="debug-add-score">+1000 Pts</button>
+            <label><input type="checkbox" id="debug-god-mode"> God Mode</label>
+            <button id="debug-close">Close</button>
+        </div>
+        <button id="debug-toggle">🐛</button>
+
         <div id="final-boss-health-container">
             <div id="final-boss-health-bar"></div>
         </div>
