@@ -233,29 +233,9 @@ export class Game {
         const spawnInterval = Math.max(400, 1200 - Math.floor(this.gameTime) * 10);
         if (performance.now() - this.lastSpawnTime > spawnInterval && !this.isBossActive && !this.isFinalBossActive) {
             
-            // Post-Game Spawning Logic
-            if (this.isAimUnlocked && this.finalBossDefeated) {
-                const rand = Math.random();
-                // THE VOID SPAWNING
-                if (rand < 0.25) {
-                    this.asteroids.push(new Asteroid(this, { type: 'orbiter' }));
-                } else if (rand < 0.45) {
-                    this.asteroids.push(new Asteroid(this, { type: 'weaver' }));
-                } else if (rand < 0.55) {
-                    this.asteroids.push(new Asteroid(this, { type: 'bulwark' }));
-                } else if (rand < 0.65) {
-                     this.asteroids.push(new Asteroid(this, { type: 'teleporter' }));
-                } else if (rand < 0.70) {
-                     this.asteroids.push(new Asteroid(this, { type: 'sizzler' }));
-                } else if (rand < 0.75) {
-                     this.asteroids.push(new Asteroid(this, { type: 'juggler' }));
-                } else if (rand < 0.80) {
-                     this.asteroids.push(new Asteroid(this, { type: 'anchor' }));
-                } else {
-                    this.asteroids.push(new Asteroid(this));
-                }
-            } else {
-                this.asteroids.push(new Asteroid(this));
+            const enemyType = this.getSpawnType();
+            if (enemyType) {
+                 this.asteroids.push(new Asteroid(this, { type: enemyType }));
             }
             this.lastSpawnTime = performance.now();
         }
@@ -274,6 +254,103 @@ export class Game {
         if (this.gameTime >= 300 && !this.isFinalBossActive && !this.finalBoss && !this.finalBossDefeated) {
             this.spawnBoss(true);
         }
+    }
+
+    getSpawnType() {
+        const isVoid = this.finalBossDefeated;
+        const t = this.gameTime;
+        const weights = [];
+
+        if (!isVoid) {
+            // NORMAL MODE
+            if (t < 60) {
+                // 0-60s: Intro. Phase-in Seeker.
+                weights.push({ type: 'standard', w: 25 });
+                weights.push({ type: 'shard', w: 20 });
+                weights.push({ type: 'splitter', w: 15 });
+                weights.push({ type: 'scout', w: 15 });
+                weights.push({ type: 'brute', w: 15 });
+                weights.push({ type: 'seeker', w: 10 });
+            } else if (t < 120) {
+                // 60-120s: Projectile Pressure. Phase-in Shooter, Decrease Scout.
+                weights.push({ type: 'standard', w: 20 });
+                weights.push({ type: 'shard', w: 15 });
+                weights.push({ type: 'splitter', w: 15 });
+                weights.push({ type: 'scout', w: 5 });
+                weights.push({ type: 'brute', w: 15 });
+                weights.push({ type: 'seeker', w: 10 });
+                weights.push({ type: 'shooter', w: 20 });
+            } else if (t < 180) {
+                // 120-180s: Complexity. Phase-in Teleporter. Decrease Standard/Shard.
+                weights.push({ type: 'standard', w: 10 });
+                weights.push({ type: 'shard', w: 10 });
+                weights.push({ type: 'splitter', w: 15 });
+                weights.push({ type: 'scout', w: 5 });
+                weights.push({ type: 'brute', w: 15 });
+                weights.push({ type: 'seeker', w: 15 });
+                weights.push({ type: 'shooter', w: 20 });
+                weights.push({ type: 'teleporter', w: 10 });
+            } else {
+                // 180-300s: Pre-Boss. High Seeker/Shooter/Teleporter. Low Brute/Splitter.
+                weights.push({ type: 'standard', w: 5 });
+                weights.push({ type: 'shard', w: 5 });
+                weights.push({ type: 'splitter', w: 5 });
+                weights.push({ type: 'scout', w: 5 });
+                weights.push({ type: 'brute', w: 5 });
+                weights.push({ type: 'seeker', w: 25 });
+                weights.push({ type: 'shooter', w: 25 });
+                weights.push({ type: 'teleporter', w: 25 });
+            }
+        } else {
+            // VOID MODE
+            // Base: Orbiter, Weaver, Bulwark, Teleporter.
+            // Phase-in: Juggler, Sizzler, Anchor.
+            // Phase-out: Teleporter, Orbiter, Weaver, Bulwark.
+
+            if (t < 60) {
+                 // 0-60s V-Time: Base Void Legion.
+                 weights.push({ type: 'orbiter', w: 30 });
+                 weights.push({ type: 'weaver', w: 30 });
+                 weights.push({ type: 'bulwark', w: 30 });
+                 weights.push({ type: 'teleporter', w: 10 });
+            } else if (t < 120) {
+                 // 60-120s V-Time: Phase-in Juggler. Decrease Orbiter.
+                 weights.push({ type: 'orbiter', w: 15 });
+                 weights.push({ type: 'weaver', w: 30 });
+                 weights.push({ type: 'bulwark', w: 30 });
+                 weights.push({ type: 'teleporter', w: 10 });
+                 weights.push({ type: 'juggler', w: 15 });
+            } else if (t < 180) {
+                 // 120-180s V-Time: Phase-in Sizzler. Decrease Weaver.
+                 weights.push({ type: 'orbiter', w: 15 });
+                 weights.push({ type: 'weaver', w: 15 });
+                 weights.push({ type: 'bulwark', w: 30 });
+                 weights.push({ type: 'teleporter', w: 10 });
+                 weights.push({ type: 'juggler', w: 15 });
+                 weights.push({ type: 'sizzler', w: 15 }); // Low chance
+            } else {
+                 // 180s+ V-Time: Phase-in Anchor. Decrease Bulwark.
+                 weights.push({ type: 'orbiter', w: 15 });
+                 weights.push({ type: 'weaver', w: 15 });
+                 weights.push({ type: 'bulwark', w: 15 });
+                 weights.push({ type: 'teleporter', w: 10 });
+                 weights.push({ type: 'juggler', w: 15 });
+                 weights.push({ type: 'sizzler', w: 15 });
+                 weights.push({ type: 'anchor', w: 15 });
+            }
+        }
+
+        // Weighted Random Selection
+        const totalWeight = weights.reduce((sum, item) => sum + item.w, 0);
+        let random = Math.random() * totalWeight;
+
+        for (const item of weights) {
+            random -= item.w;
+            if (random <= 0) {
+                return item.type;
+            }
+        }
+        return weights.length > 0 ? weights[0].type : 'standard';
     }
 
     spawnBoss(isFinal) {
