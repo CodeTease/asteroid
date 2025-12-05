@@ -390,10 +390,9 @@ export class LaserAlly extends Player {
 export class EchoAlly {
     constructor() {
         this.x = canvas.width / 2;
-        this.y = canvas.height - 40;
+        this.y = canvas.height - 100; // Start higher
         this.size = 15;
-        this.history = []; // Trail positions
-        this.delay = 10; // Frames delay
+        this.floatTimer = 0; // For sine wave animation
     }
 
     draw(game) {
@@ -432,12 +431,21 @@ export class EchoAlly {
 
     update(game, dt) {
         if (game.player && !game.player.isDestroyed) {
-            // Smoothly follow player with a delay feel (Lerp)
-            const targetX = game.player.x;
-            const targetY = game.player.y + 40; // Stay slightly behind
+            this.floatTimer += dt;
             
-            this.x += (targetX - this.x) * 5 * dt;
-            this.y += (targetY - this.y) * 5 * dt;
+            // GHOSTLY DRIFT LOGIC
+            // Side to side movement (30px wide sine wave)
+            const floatX = Math.sin(this.floatTimer * 2) * 30; 
+            // Slight up and down hover (10px height)
+            const floatY = Math.sin(this.floatTimer * 4) * 10; 
+
+            // Target is ABOVE player now (-60px)
+            const targetX = game.player.x + floatX;
+            const targetY = game.player.y - 60 + floatY; 
+            
+            // Smoothly move towards target (Lower lerp factor = more drift/delay)
+            this.x += (targetX - this.x) * 3 * dt;
+            this.y += (targetY - this.y) * 3 * dt;
         }
     }
 }
