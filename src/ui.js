@@ -1,4 +1,3 @@
-
 // DOM Elements
 export const canvas = document.getElementById('gameCanvas');
 export const ctx = canvas.getContext('2d');
@@ -34,6 +33,17 @@ export const laserDamageLevelDisplay = document.getElementById('laser-damage-lev
 export const laserCooldownLevelDisplay = document.getElementById('laser-cooldown-level');
 export const howToPlayModal = document.getElementById('how-to-play-modal');
 export const closeHowToPlayButton = document.getElementById('close-how-to-play-button');
+
+// Heat Elements
+export const heatGroup = document.getElementById('heat-group');
+export const heatBar = document.getElementById('heat-bar');
+export const overheatText = document.getElementById('overheat-text');
+
+// Debug Elements
+export const debugSpawnBoss = document.getElementById('debug-spawn-boss');
+export const debugUnlockAim = document.getElementById('debug-unlock-aim');
+export const debugKillAll = document.getElementById('debug-kill-all');
+export const debugAddPoints = document.getElementById('debug-add-points');
 
 
 export function showMessage(title, text) {

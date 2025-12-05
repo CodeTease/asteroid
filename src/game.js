@@ -1,6 +1,5 @@
-
 import * as UI from './ui.js';
-import { Player, Projectile, AIAlly, LaserAlly, Asteroid, FinalBoss, Particle } from './classes.js';
+import { Player, Projectile, AIAlly, LaserAlly, EchoAlly, Coolant, Asteroid, FinalBoss, Particle, StaticMine } from './classes.js';
 import { audioManager } from './audio.js';
 
 export class Game {
@@ -8,12 +7,13 @@ export class Game {
         this.animationFrameId = 0;
         this.keys = {};
 
-        // Game State Variables moved from class properties to constructor
+        // Game State Variables
         this.player = null;
         this.projectiles = [];
         this.enemyProjectiles = [];
         this.asteroids = [];
         this.particles = [];
+        this.coolants = []; // New drop items
         this.score = 0;
         this.gameTime = 0;
         this.deltaTime = 0;
@@ -24,6 +24,7 @@ export class Game {
         this.upgradePoints = 0;
         this.allyUpgrades = {};
         this.laserAlly = null;
+        this.echoAlly = null; // REPLACED PRISM WITH ECHO
         this.finalBoss = null;
         this.isBossActive = false;
         this.isFinalBossActive = false;
@@ -36,6 +37,10 @@ export class Game {
         this.screenShakeIntensity = 0;
         this.flashDuration = 0;
         this.statusMessageTimeout = null;
+
+        // Aim Mode
+        this.isAimUnlocked = false;
+        this.mousePos = { x: 0, y: 0 };
     }
 
     start() {
@@ -63,6 +68,7 @@ export class Game {
         this.enemyProjectiles = [];
         this.asteroids = [];
         this.particles = [];
+        this.coolants = [];
         this.score = 0;
         this.gameTime = 0;
         this.deltaTime = 0;
@@ -76,6 +82,7 @@ export class Game {
         this.finalBossDefeated = false;
         this.finalBoss = null;
         this.laserAlly = null;
+        this.echoAlly = null;
         this.upgradePoints = 0;
         this.allyUpgrades = {
             fireRateLevel: 0,
@@ -88,20 +95,19 @@ export class Game {
         this.flashDuration = 0;
         if (this.statusMessageTimeout) clearTimeout(this.statusMessageTimeout);
         this.statusMessageTimeout = null;
+        
+        this.isAimUnlocked = false;
 
         this.updateHUD();
         this.updateGameStatus('Ready', false);
         UI.finalBossHealthContainer.style.display = 'none';
+        UI.heatGroup.style.display = 'none'; // Hide heat bar initially
     }
 
     gameLoop(currentTime) {
         let deltaTime = (currentTime - this.lastTime) / 1000;
         this.lastTime = currentTime;
-        
-        // Cap deltaTime to prevent massive jumps when tab is refocused
-        if (deltaTime > 0.25) {
-            deltaTime = 0.25;
-        }
+        if (deltaTime > 0.25) deltaTime = 0.25;
 
         if (this.isPaused) {
             this.animationFrameId = requestAnimationFrame((t) => this.gameLoop(t));
@@ -122,12 +128,21 @@ export class Game {
 
         // Update Game Objects
         this.player.update(this, dt);
+        this.player.draw(this);
         this.player.allies.forEach(p => p.update(this, dt));
         if (this.laserAlly) this.laserAlly.update(this, dt);
+        if (this.echoAlly) this.echoAlly.update(this, dt);
+
+        this.coolants.forEach((c, i) => {
+             c.update(dt);
+             if (c.y > UI.canvas.height) this.coolants.splice(i, 1);
+        });
 
         for (let i = this.projectiles.length - 1; i >= 0; i--) {
             const p = this.projectiles[i];
             p.update(this, dt);
+            
+            // CLEANUP LOGIC: Expired or Off-screen
             if (p.y < 0 || p.y > UI.canvas.height || p.x < 0 || p.x > UI.canvas.width) {
                 this.projectiles.splice(i, 1);
             }
@@ -178,13 +193,27 @@ export class Game {
 
         UI.ctx.clearRect(-UI.canvas.width, -UI.canvas.height, UI.canvas.width * 2, UI.canvas.height * 2);
 
-        this.player.draw();
+        this.player.draw(this);
         this.player.allies.forEach(p => p.draw());
         if (this.laserAlly) this.laserAlly.draw();
+        if (this.echoAlly) this.echoAlly.draw(this);
+        
+        this.coolants.forEach(c => c.draw());
+
         this.projectiles.forEach(p => p.draw());
         this.enemyProjectiles.forEach(p => p.draw());
-        this.asteroids.forEach(a => a.draw());
+        this.asteroids.forEach(a => a.draw(this)); // Pass game for shield checking
         this.particles.forEach(p => p.draw());
+
+        if (this.isAimUnlocked) {
+            UI.ctx.save();
+            UI.ctx.strokeStyle = '#00ff00';
+            UI.ctx.lineWidth = 2;
+            UI.ctx.beginPath();
+            UI.ctx.arc(this.mousePos.x, this.mousePos.y, 10, 0, Math.PI * 2);
+            UI.ctx.stroke();
+            UI.ctx.restore();
+        }
 
         if (this.flashDuration > 0) {
             UI.ctx.globalAlpha = this.flashDuration / 10;
@@ -200,20 +229,36 @@ export class Game {
     }
 
     handleSpawning() {
-        // Regular Asteroids
         const spawnInterval = Math.max(400, 1200 - Math.floor(this.gameTime) * 10);
         if (performance.now() - this.lastSpawnTime > spawnInterval && !this.isBossActive && !this.isFinalBossActive) {
-            this.asteroids.push(new Asteroid(this));
+            
+            // Post-Game Spawning Logic
+            if (this.isAimUnlocked && this.finalBossDefeated) {
+                const rand = Math.random();
+                // THE VOID SPAWNING
+                if (rand < 0.25) {
+                    this.asteroids.push(new Asteroid(this, { type: 'orbiter' }));
+                } else if (rand < 0.45) {
+                    this.asteroids.push(new Asteroid(this, { type: 'weaver' }));
+                } else if (rand < 0.55) {
+                    this.asteroids.push(new Asteroid(this, { type: 'bulwark' }));
+                } else if (rand < 0.65) {
+                     this.asteroids.push(new Asteroid(this, { type: 'teleporter' }));
+                } else {
+                    this.asteroids.push(new Asteroid(this));
+                }
+            } else {
+                this.asteroids.push(new Asteroid(this));
+            }
             this.lastSpawnTime = performance.now();
         }
-        // Regular Boss
-        if (this.gameTime >= this.nextBossTime && !this.isBossActive && !this.isFinalBossActive) {
+        
+        if (this.gameTime >= this.nextBossTime && !this.isBossActive && !this.isFinalBossActive && !this.finalBossDefeated) {
             this.spawnBoss(false);
             this.nextBossTime += 60;
         }
 
-        // Final Boss Warning & Arrival
-        if (this.gameTime >= 295 && !this.finalBossWarningShown) {
+        if (this.gameTime >= 295 && !this.finalBossWarningShown && !this.finalBossDefeated) {
             this.updateGameStatus('!!! FINAL BOSS WARNING !!!');
             audioManager.playSound('finalbossWarning');
             this.finalBossWarningShown = true;
@@ -246,6 +291,7 @@ export class Game {
 
 
     checkCollisions() {
+        // Player vs Asteroids/Enemies
         for (let j = this.asteroids.length - 1; j >= 0; j--) {
             if (this.isGameOver) break;
             const asteroid = this.asteroids[j];
@@ -265,6 +311,7 @@ export class Game {
             }
         }
 
+        // Player vs Enemy Projectiles
         for (let j = this.enemyProjectiles.length - 1; j >= 0; j--) {
             const p = this.enemyProjectiles[j];
             if (this.checkCollision(this.player, p)) {
@@ -279,21 +326,49 @@ export class Game {
             }
         }
 
+        // Player vs Coolant
+        for (let j = this.coolants.length - 1; j >= 0; j--) {
+            const c = this.coolants[j];
+            if (this.checkCollision(this.player, c)) {
+                this.player.heat = 0;
+                this.player.isOverheated = false;
+                clearTimeout(this.player.overheatTimeout);
+                this.updateGameStatus("Coolant acquired! Weapon Cooled.");
+                audioManager.playSound('AIupgraded', 0.5); // Reuse sound
+                this.coolants.splice(j, 1);
+            }
+        }
+
+        // Projectiles vs Enemies
         for (let i = this.projectiles.length - 1; i >= 0; i--) {
+            let hitSomething = false;
+
             for (let j = this.asteroids.length - 1; j >= 0; j--) {
                 if (!this.projectiles[i] || !this.asteroids[j]) continue;
                 if (this.checkCollision(this.projectiles[i], this.asteroids[j])) {
                     const asteroid = this.asteroids[j];
-                    this.createExplosion(asteroid.x, asteroid.y, asteroid.color);
+                    
+                    // BULWARK SHIELD LOGIC
+                    if (asteroid.type === 'bulwark') {
+                        // Better: If player is below bulwark (y > asteroid.y), shield blocks.
+                        // Flank = get above it.
+                        if (this.player.y > asteroid.y) {
+                            this.createExplosion(this.projectiles[i].x, this.projectiles[i].y, '#00e5ff', 5); // Blue spark
+                            this.projectiles.splice(i, 1);
+                            hitSomething = true;
+                            break;
+                        }
+                    }
+
+
+                    this.createExplosion(asteroid.x, asteroid.y, asteroid.color, 5);
                     asteroid.health -= this.projectiles[i].damage;
                     this.projectiles.splice(i, 1);
-
-                    if (asteroid.health <= 0) {
-                        // This is now handled in the update loop
-                    }
+                    hitSomething = true;
                     break;
                 }
             }
+            if (hitSomething) continue;
         }
     }
 
@@ -302,11 +377,16 @@ export class Game {
             if (this.finalBoss && !this.finalBoss.isDefeated) {
                 audioManager.playSound('finalbossExplosion', 1.0);
                 this.finalBoss.isDefeated = true;
-                this.finalBossDefeated = true; // Prevents respawning
+                this.finalBossDefeated = true; 
                 this.score += 5000;
                 this.isFinalBossActive = false;
                 UI.finalBossHealthContainer.style.display = 'none';
-                this.updateGameStatus('FINAL BOSS DEFEATED!');
+                
+                // UNLOCK AIM MODE & VOID MODE
+                this.isAimUnlocked = true;
+                this.updateGameStatus('FINAL BOSS DEFEATED! VOID MODE UNLOCKED!');
+                UI.heatGroup.style.display = 'flex'; // Show Heat Bar
+                
                 this.upgradePoints += 10;
                 this.player.shieldCharges += 5;
                 this.screenShakeDuration = 60;
@@ -314,6 +394,11 @@ export class Game {
                 this.createExplosion(asteroid.x, asteroid.y, asteroid.color, 400);
                 this.asteroids.splice(index, 1);
                 this.finalBoss = null;
+                
+                // Grant ECHO Ally instead of Prism
+                this.echoAlly = new EchoAlly();
+                this.updateGameStatus("Echo Ally Acquired!");
+
                 if (!this.areAllUpgradesMaxed()) {
                     this.isAutoUpgradeEnabled ? this.autoUpgradeAllies() : this.showUpgradeModal();
                 }
@@ -321,14 +406,17 @@ export class Game {
         } else {
             this.createExplosion(asteroid.x, asteroid.y, asteroid.color, asteroid.size);
             this.asteroids.splice(index, 1);
+            
+            // Drop Coolant (10% chance from Void Enemies)
+            if (['orbiter', 'weaver', 'bulwark'].includes(asteroid.type) && Math.random() < 0.1) {
+                this.coolants.push(new Coolant(asteroid.x, asteroid.y));
+            }
+
             if (asteroid.isBoss) {
                 this.score += 250;
                 this.isBossActive = false;
                 this.updateGameStatus('Boss defeated!');
                 this.upgradePoints++;
-                if (!this.areAllUpgradesMaxed()) {
-                    this.isAutoUpgradeEnabled ? this.autoUpgradeAllies() : this.showUpgradeModal();
-                }
             } else {
                 audioManager.playSound('enemyDefeated', 0.3);
                 this.score += 10;
@@ -418,8 +506,23 @@ export class Game {
         UI.shieldDisplay.innerText = `${this.player.shieldCharges}`;
         UI.timerDisplay.innerText = `${Math.floor(this.gameTime)}s`;
         UI.updateUpgradePoints(this.upgradePoints);
+        
+        // Update Heat Bar
+        if (this.player) {
+            const heatPercent = (this.player.heat / this.player.maxHeat) * 100;
+            UI.heatBar.style.width = `${heatPercent}%`;
+            
+            if (this.player.isOverheated) {
+                UI.overheatText.style.display = 'block';
+                UI.heatBar.style.backgroundColor = 'red';
+            } else {
+                UI.overheatText.style.display = 'none';
+                UI.heatBar.style.backgroundColor = ''; // Reset to gradient
+            }
+        }
     }
 
+    // ... (Existing helper methods) ...
     updateGameStatus(text, autoFade = true) {
         if (this.statusMessageTimeout) {
             clearTimeout(this.statusMessageTimeout);
@@ -442,8 +545,6 @@ export class Game {
         }
     }
 
-    // --- UPGRADE LOGIC ---
-    
     showUpgradeModal() {
         this.isPaused = true;
         this.updateUpgradeModalUI();

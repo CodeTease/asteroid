@@ -45,6 +45,16 @@
                 <span class="hud-item">🛡️ <span id="shields">0</span></span>
                 <span class="hud-item">💠 <span id="upgrade-points">0</span></span>
             </div>
+            
+            <!-- NEW: HEAT BAR -->
+            <div class="hud-group" id="heat-group" style="display: none; flex-direction: column; gap: 2px;">
+                <span style="font-size: 0.7rem; color: #ff4500;">HEAT</span>
+                <div id="heat-bar-container">
+                    <div id="heat-bar"></div>
+                </div>
+                <span id="overheat-text">OVERHEATED!</span>
+            </div>
+
             <div class="hud-group">
                 <span class="hud-item" id="game-status">Ready</span>
             </div>
@@ -103,6 +113,15 @@
             </div>
         </div>
         <button id="close-how-to-play-button">Got it</button>
+    </div>
+
+    <!-- DEBUG TOOL -->
+    <div id="debug-panel" class="unselectable">
+        <h3>Teaser Debug</h3>
+        <button id="debug-spawn-boss">Spawn Final Boss</button>
+        <button id="debug-unlock-aim">Unlock Void Mode</button>
+        <button id="debug-kill-all">Kill All Enemies</button>
+        <button id="debug-add-points">+100 Upgrade Points</button>
     </div>
 
     <script type="module" src="./index.js"></script>
