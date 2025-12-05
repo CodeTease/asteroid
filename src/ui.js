@@ -1,3 +1,4 @@
+
 // DOM Elements
 export const canvas = document.getElementById('gameCanvas');
 export const ctx = canvas.getContext('2d');
@@ -61,8 +62,8 @@ export function updateUpgradeModal(points, upgrades, hasLaserAlly) {
     upgradeDoubleshotBtn.disabled = points < 1 || upgrades.hasDoubleShot;
     upgradeProjectilespeedBtn.disabled = points < 1 || upgrades.hasFasterProjectiles;
 
-    upgradeDoubleshotBtn.innerText = upgrades.hasDoubleShot ? "Đã Nâng Cấp" : "Bắn Gấp Đôi";
-    upgradeProjectilespeedBtn.innerText = upgrades.hasFasterProjectiles ? "Đã Nâng Cấp" : "Đạn Chính Xác Hơn";
+    upgradeDoubleshotBtn.innerText = upgrades.hasDoubleShot ? "Purchased" : "Double Shot";
+    upgradeProjectilespeedBtn.innerText = upgrades.hasFasterProjectiles ? "Purchased" : "Faster Projectiles";
 
     if (hasLaserAlly) {
         laserAllyUpgradesContainer.style.display = 'block';

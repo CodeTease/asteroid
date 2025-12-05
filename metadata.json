@@ -1,5 +1,6 @@
 {
-  "name": "Smth",
-  "description": "An empty app",
+  "name": "Asteroid",
+  "description": "A awesome game",
+  "bonus": "Not a CodeTease project!",
   "requestFramePermissions": []
 }

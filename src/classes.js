@@ -1,3 +1,4 @@
+
 import { Game } from "./game.js";
 import { canvas, ctx } from "./ui.js";
 import { audioManager } from "./audio.js";
@@ -601,18 +602,18 @@ export class FinalBoss extends Asteroid {
     performAttack(game, attack) {
         switch (attack) {
             case 'summonMinions':
-                game.updateGameStatus('Boss triệu hồi quái!');
+                game.updateGameStatus('Boss summoning minions!');
                 for (let i = 0; i < 5; i++) {
                     game.asteroids.push(new Asteroid(game, { x: this.x + (Math.random() - 0.5) * 100, y: this.y }));
                 }
                 break;
             case 'summonCommanders':
-                game.updateGameStatus('Boss triệu hồi chỉ huy!');
+                game.updateGameStatus('Boss summoning commanders!');
                 game.asteroids.push(new Asteroid(game, { isBoss: true, x: this.x - 100, y: this.y, healthOverride: 50 }));
                 game.asteroids.push(new Asteroid(game, { isBoss: true, x: this.x + 100, y: this.y, healthOverride: 50 }));
                 break;
             case 'dash':
-                game.updateGameStatus('Boss sắp lao tới!');
+                game.updateGameStatus('Boss incoming charge!');
                 this.dashTarget = {
                     x: game.player.x + (Math.random() - 0.5) * 150,
                     y: game.player.y - (Math.random() * 100 + 50)
@@ -621,7 +622,7 @@ export class FinalBoss extends Asteroid {
                 this.warningTime = Date.now();
                 break;
             case 'barrage':
-                game.updateGameStatus('Boss bắn đạn!');
+                game.updateGameStatus('Boss firing barrage!');
                 audioManager.playSound('enemyShoot', 0.8);
                 for (let i = 0; i < 30; i++) {
                     const angle = Math.random() * Math.PI; // Shoot downwards in a 180 degree arc

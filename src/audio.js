@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -11,20 +12,18 @@ export class AudioManager {
     isGameSoundsInitialized = false;
     isMenuMusicInitialized = false;
 
-    // --- SOLUTION: Use absolute URLs from a reliable CDN (ImageKit) ---
-    // This bypasses any server-side routing issues (SPA fallback) on the deployment platform.
     soundSources = {
-        'menuMusic': 'https://ik.imagekit.io/irammini/sounds/menuMusic.mp3',
-        'shoot': 'https://ik.imagekit.io/irammini/sounds/shoot.mp3',
-        'enemyShoot': 'https://ik.imagekit.io/irammini/sounds/enemyShoot.mp3',
-        'finalbossExplosion': 'https://ik.imagekit.io/irammini/sounds/finalbossExplosion.mp3',
-        'AIupgraded': 'https://ik.imagekit.io/irammini/sounds/AIupgraded.mp3',
-        'enemyDefeated': 'https://ik.imagekit.io/irammini/sounds/enemyDefeated.mp3',
-        'finalbossBegin': 'https://ik.imagekit.io/irammini/sounds/finalbossBegin.mp3',
-        'finalbossWarning': 'https://ik.imagekit.io/irammini/sounds/finalbossWarning.mp3',
-        'laseringSound': 'https://ik.imagekit.io/irammini/sounds/laseringSound.mp3',
-        'PlayerDead': 'https://ik.imagekit.io/irammini/sounds/PlayerDead.mp3',
-        'Playerupgraded': 'https://ik.imagekit.io/irammini/sounds/Playerupgraded.mp3',
+        'menuMusic': 'https://cdn.teaserverse.online/sounds/asteroid/menuMusic.mp3',
+        'shoot': 'https://cdn.teaserverse.online/sounds/asteroid/shoot.mp3',
+        'enemyShoot': 'https://cdn.teaserverse.online/sounds/asteroid/enemyShoot.mp3',
+        'finalbossExplosion': 'https://cdn.teaserverse.online/sounds/asteroid/finalbossExplosion.mp3',
+        'AIupgraded': 'https://cdn.teaserverse.online/sounds/asteroid/AIupgraded.mp3',
+        'enemyDefeated': 'https://cdn.teaserverse.online/sounds/asteroid/enemyDefeated.mp3',
+        'finalbossBegin': 'https://cdn.teaserverse.online/sounds/asteroid/finalbossBegin.mp3',
+        'finalbossWarning': 'https://cdn.teaserverse.online/sounds/asteroid/finalbossWarning.mp3',
+        'laseringSound': 'https://cdn.teaserverse.online/sounds/asteroid/laseringSound.mp3',
+        'PlayerDead': 'https://cdn.teaserverse.online/sounds/asteroid/PlayerDead.mp3',
+        'Playerupgraded': 'https://cdn.teaserverse.online/sounds/asteroid/Playerupgraded.mp3',
     };
 
     constructor() {
@@ -42,7 +41,6 @@ export class AudioManager {
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
         } catch (e) {
             console.error('Web Audio API is not supported in this browser', e);
-            alert('Web Audio API is not supported in this browser. Sound will not work.');
         }
     }
 
@@ -93,14 +91,12 @@ export class AudioManager {
                 throw new Error(`HTTP error! status: ${response.status} for ${fullPath}`);
             }
             
-            // Diagnostic check: If server returns HTML, throw a clear error.
             const contentType = response.headers.get('content-type');
             if (contentType && contentType.includes('text/html')) {
                 throw new Error(`Server returned a file that looks like HTML instead of an audio file. Check your CDN paths and server configuration. URL: ${fullPath}`);
             }
 
             const arrayBuffer = await response.arrayBuffer();
-            // decodeAudioData will throw a specific DOMException if the audio data is invalid/corrupt
             const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
             this.decodedBuffers[name] = audioBuffer;
         } catch (e) {

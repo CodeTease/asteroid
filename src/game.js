@@ -1,3 +1,4 @@
+
 import * as UI from './ui.js';
 import { Player, Projectile, AIAlly, LaserAlly, Asteroid, FinalBoss, Particle } from './classes.js';
 import { audioManager } from './audio.js';
@@ -89,7 +90,7 @@ export class Game {
         this.statusMessageTimeout = null;
 
         this.updateHUD();
-        this.updateGameStatus('Sẵn sàng', false);
+        this.updateGameStatus('Ready', false);
         UI.finalBossHealthContainer.style.display = 'none';
     }
 
@@ -144,7 +145,7 @@ export class Game {
             if (a.y > UI.canvas.height + a.size) {
                 if (a.isBoss && a !== this.finalBoss) {
                     this.isBossActive = false;
-                    this.handleGameOver("Boss đã trốn thoát!");
+                    this.handleGameOver("Boss escaped!");
                     break;
                 } else {
                     this.asteroids.splice(i, 1);
@@ -213,7 +214,7 @@ export class Game {
 
         // Final Boss Warning & Arrival
         if (this.gameTime >= 295 && !this.finalBossWarningShown) {
-            this.updateGameStatus('!!! Cảnh Báo Boss Cuối !!!');
+            this.updateGameStatus('!!! FINAL BOSS WARNING !!!');
             audioManager.playSound('finalbossWarning');
             this.finalBossWarningShown = true;
         }
@@ -233,13 +234,13 @@ export class Game {
             this.finalBoss = new FinalBoss(this);
             this.asteroids.push(this.finalBoss);
             UI.finalBossHealthContainer.style.display = 'block';
-            this.updateGameStatus('!!! BOSS CUỐI XUẤT HIỆN !!!');
+            this.updateGameStatus('!!! FINAL BOSS APPEARED !!!');
             this.screenShakeDuration = 120;
             this.screenShakeIntensity = 4;
         } else if (!this.isBossActive && !this.isFinalBossActive) {
             this.asteroids.push(new Asteroid(this, { isBoss: true }));
             this.isBossActive = true;
-            this.updateGameStatus('Boss xuất hiện!');
+            this.updateGameStatus('Boss appeared!');
         }
     }
 
@@ -252,14 +253,14 @@ export class Game {
                 if (this.player.shieldCharges > 0) {
                     if (asteroid.isBoss) {
                         this.player.shieldCharges = 0;
-                        this.handleGameOver("Lá chắn của bạn đã bị boss phá hủy!");
+                        this.handleGameOver("Your shield was destroyed by the boss!");
                     } else {
                         this.player.shieldCharges--;
                         this.createExplosion(asteroid.x, asteroid.y, '#00e5ff', 40);
                         this.asteroids.splice(j, 1);
                     }
                 } else {
-                    this.handleGameOver("Bạn đã va chạm với tiểu hành tinh.");
+                    this.handleGameOver("You collided with an asteroid.");
                 }
             }
         }
@@ -271,7 +272,7 @@ export class Game {
                     this.player.shieldCharges--;
                     this.createExplosion(p.x, p.y, '#00e5ff', 20);
                 } else {
-                    this.handleGameOver("Bạn bị trúng đạn.");
+                    this.handleGameOver("You were hit by a projectile.");
                 }
                 this.enemyProjectiles.splice(j, 1);
                 break;
@@ -305,7 +306,7 @@ export class Game {
                 this.score += 5000;
                 this.isFinalBossActive = false;
                 UI.finalBossHealthContainer.style.display = 'none';
-                this.updateGameStatus('BOSS CUỐI BỊ TIÊU DIỆT!');
+                this.updateGameStatus('FINAL BOSS DEFEATED!');
                 this.upgradePoints += 10;
                 this.player.shieldCharges += 5;
                 this.screenShakeDuration = 60;
@@ -323,7 +324,7 @@ export class Game {
             if (asteroid.isBoss) {
                 this.score += 250;
                 this.isBossActive = false;
-                this.updateGameStatus('Boss bị tiêu diệt!');
+                this.updateGameStatus('Boss defeated!');
                 this.upgradePoints++;
                 if (!this.areAllUpgradesMaxed()) {
                     this.isAutoUpgradeEnabled ? this.autoUpgradeAllies() : this.showUpgradeModal();
@@ -357,8 +358,8 @@ export class Game {
         this.flashDuration = 10;
         this.createExplosion(this.player.x, this.player.y, '#ff4500', 100);
 
-        this.updateGameStatus("Kết thúc!", false);
-        UI.showMessage("Trò chơi kết thúc!", `${reason} Điểm của bạn: ${this.score}`);
+        this.updateGameStatus("Game Over!", false);
+        UI.showMessage("Game Over!", `${reason} Your Score: ${this.score}`);
     }
 
     checkCollision(obj1, obj2) {
@@ -384,30 +385,30 @@ export class Game {
         if (this.score >= 250 && this.player.projectileSize < 7) {
             this.player.projectileSize = 7;
             this.player.projectileDamage = 2;
-            this.updateGameStatus('Nâng cấp! Đạn to hơn!');
+            this.updateGameStatus('Upgrade! Larger Bullets!');
             audioManager.playSound('Playerupgraded');
         }
         if (this.score >= 500 && this.player.fireRate < 2) {
             this.player.fireRate = 2;
-            this.updateGameStatus('Nâng cấp! Bắn 2 viên!');
+            this.updateGameStatus('Upgrade! Double Shot!');
             audioManager.playSound('Playerupgraded');
         }
         if (this.score >= 2000 && this.player.allies.length === 0) {
             this.player.allies.push(new AIAlly('left'));
             this.player.allies.push(new AIAlly('right'));
-            this.updateGameStatus('Nâng cấp! Đồng minh AI!');
+            this.updateGameStatus('Upgrade! AI Allies!');
             audioManager.playSound('Playerupgraded', 0.8);
         }
         if (this.score >= 5000 && !this.laserAlly) {
             this.laserAlly = new LaserAlly();
             this.laserAlly.applyUpgrades(this);
-            this.updateGameStatus('Đồng minh Laser đã tham chiến!');
+            this.updateGameStatus('Laser Ally joined the battle!');
             audioManager.playSound('Playerupgraded', 0.8);
         }
         if (this.score >= this.nextShieldScore) {
             this.player.shieldCharges += 3;
             this.nextShieldScore += 1500;
-            this.updateGameStatus('Khiên đã được sạc!');
+            this.updateGameStatus('Shield Recharged!');
             audioManager.playSound('Playerupgraded');
         }
     }
