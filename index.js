@@ -104,9 +104,25 @@ window.addEventListener('DOMContentLoaded', () => {
             const touch = e.touches[0];
             const rect = UI.canvas.getBoundingClientRect();
             const touchX = touch.clientX - rect.left;
+            const touchY = touch.clientY - rect.top;
+
+            // Move player (Constraint to X axis mostly, but Aim Mode relies on touch position)
+            // Classic movement:
             game.player.x = Math.max(game.player.size, Math.min(UI.canvas.width - game.player.size, touchX));
+            
+            // Update aim position
+            game.mousePos = { x: touchX, y: touchY };
         }
     }
+
+    // Capture mouse position for Aim Mode
+    UI.canvas.addEventListener('mousemove', (e) => {
+        const rect = UI.canvas.getBoundingClientRect();
+        game.mousePos = {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
+        };
+    });
 
     UI.canvas.addEventListener('touchstart', (e) => {
         e.preventDefault();
@@ -147,6 +163,29 @@ window.addEventListener('DOMContentLoaded', () => {
     });
     UI.autoUpgradeCheckbox.addEventListener('change', () => {
         game.isAutoUpgradeEnabled = UI.autoUpgradeCheckbox.checked;
+    });
+
+    // --- DEBUG LISTENERS ---
+    UI.debugSpawnBoss.addEventListener('click', () => {
+        if (!game.isFinalBossActive) {
+            game.gameTime = 295; // Trigger warning
+        }
+    });
+    
+    UI.debugUnlockAim.addEventListener('click', () => {
+        game.isAimUnlocked = true;
+        game.finalBossDefeated = true; // To allow new spawn logic
+        game.updateGameStatus("CHEAT: Aim Mode Unlocked!");
+    });
+    
+    UI.debugKillAll.addEventListener('click', () => {
+        game.asteroids.forEach(a => a.health = 0);
+        if (game.finalBoss) game.finalBoss.health = 0;
+    });
+
+    UI.debugAddPoints.addEventListener('click', () => {
+        game.upgradePoints += 100;
+        UI.updateUpgradePoints(game.upgradePoints);
     });
 
 });
