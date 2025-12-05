@@ -1,5 +1,5 @@
 import * as UI from './ui.js';
-import { Player, Projectile, AIAlly, LaserAlly, PrismAlly, Coolant, Asteroid, FinalBoss, Particle, StaticMine } from './classes.js';
+import { Player, Projectile, AIAlly, LaserAlly, EchoAlly, Coolant, Asteroid, FinalBoss, Particle, StaticMine } from './classes.js';
 import { audioManager } from './audio.js';
 
 export class Game {
@@ -24,7 +24,7 @@ export class Game {
         this.upgradePoints = 0;
         this.allyUpgrades = {};
         this.laserAlly = null;
-        this.prismAlly = null; // New Ally
+        this.echoAlly = null; // REPLACED PRISM WITH ECHO
         this.finalBoss = null;
         this.isBossActive = false;
         this.isFinalBossActive = false;
@@ -82,7 +82,7 @@ export class Game {
         this.finalBossDefeated = false;
         this.finalBoss = null;
         this.laserAlly = null;
-        this.prismAlly = null;
+        this.echoAlly = null;
         this.upgradePoints = 0;
         this.allyUpgrades = {
             fireRateLevel: 0,
@@ -131,7 +131,7 @@ export class Game {
         this.player.draw(this);
         this.player.allies.forEach(p => p.update(this, dt));
         if (this.laserAlly) this.laserAlly.update(this, dt);
-        if (this.prismAlly) this.prismAlly.update(this, dt);
+        if (this.echoAlly) this.echoAlly.update(this, dt);
 
         this.coolants.forEach((c, i) => {
              c.update(dt);
@@ -143,7 +143,7 @@ export class Game {
             p.update(this, dt);
             
             // CLEANUP LOGIC: Expired or Off-screen
-            if (p.y < 0 || p.y > UI.canvas.height || p.x < 0 || p.x > UI.canvas.width || (p.isHoming && p.lifespan <= 0)) {
+            if (p.y < 0 || p.y > UI.canvas.height || p.x < 0 || p.x > UI.canvas.width) {
                 this.projectiles.splice(i, 1);
             }
         }
@@ -196,7 +196,7 @@ export class Game {
         this.player.draw(this);
         this.player.allies.forEach(p => p.draw());
         if (this.laserAlly) this.laserAlly.draw();
-        if (this.prismAlly) this.prismAlly.draw();
+        if (this.echoAlly) this.echoAlly.draw(this);
         
         this.coolants.forEach(c => c.draw());
 
@@ -339,32 +339,9 @@ export class Game {
             }
         }
 
-        // Projectiles vs Enemies/Prism
+        // Projectiles vs Enemies
         for (let i = this.projectiles.length - 1; i >= 0; i--) {
             let hitSomething = false;
-
-            // Check Collision with Prism Ally
-            if (this.prismAlly && this.checkCollision(this.projectiles[i], this.prismAlly) && !this.projectiles[i].isHoming) {
-                this.createExplosion(this.prismAlly.x, this.prismAlly.y, '#e500ff', 5);
-                this.prismAlly.onHit(); // Trigger visuals
-                
-                // --- PRISM 2.0 UPDATE: THE SWARM ---
-                const swarmCount = 6; // Double the original amount
-                for(let k=0; k < swarmCount; k++) {
-                    const angle = (Math.PI * 2 / swarmCount) * k;
-                    // Initial explosion velocity
-                    const vx = Math.cos(angle) * 8;
-                    const vy = Math.sin(angle) * 8;
-                    
-                    this.projectiles.push(new Projectile(this.prismAlly.x, this.prismAlly.y, {
-                        vx: vx, vy: vy, color: '#e500ff', isHoming: true, size: 4
-                    }));
-                }
-                // ------------------------------------
-                
-                this.projectiles.splice(i, 1);
-                continue; 
-            }
 
             for (let j = this.asteroids.length - 1; j >= 0; j--) {
                 if (!this.projectiles[i] || !this.asteroids[j]) continue;
@@ -373,16 +350,6 @@ export class Game {
                     
                     // BULWARK SHIELD LOGIC
                     if (asteroid.type === 'bulwark') {
-                        // Very rough check: Shield blocks shots from "below/front" relative to asteroid
-                        // Assuming Bulwark faces player, and players are usually below enemies
-                        // Simple angle check: Is projectile hitting the bottom half?
-                        
-                        // Let's refine: Block hits that are hitting the 'shield' arc
-                        // Shield is drawn from -PI/2 to PI/2 (relative to rotation towards player)
-                        // This logic is complex for simple box collision.
-                        // Simplified: Bullet is blocked if collision happens "between" Bulwark and Player.
-                        // But let's just use a random chance for now to simulate deflection if hitting from front.
-                        
                         // Better: If player is below bulwark (y > asteroid.y), shield blocks.
                         // Flank = get above it.
                         if (this.player.y > asteroid.y) {
@@ -428,9 +395,9 @@ export class Game {
                 this.asteroids.splice(index, 1);
                 this.finalBoss = null;
                 
-                // Grant Prism Ally
-                this.prismAlly = new PrismAlly(this);
-                this.updateGameStatus("Prism Ally Acquired!");
+                // Grant ECHO Ally instead of Prism
+                this.echoAlly = new EchoAlly();
+                this.updateGameStatus("Echo Ally Acquired!");
 
                 if (!this.areAllUpgradesMaxed()) {
                     this.isAutoUpgradeEnabled ? this.autoUpgradeAllies() : this.showUpgradeModal();

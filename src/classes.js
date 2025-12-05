@@ -115,28 +115,39 @@ export class Player {
 
         audioManager.playSound('shoot', 0.5);
 
-        let vx = 0;
-        let vy = -8;
+        // Helper to create bullets
+        const createBullet = (originX, originY) => {
+            let vx = 0;
+            let vy = -8;
 
-        if (game.isAimUnlocked && game.mousePos) {
-            const dx = game.mousePos.x - this.x;
-            const dy = game.mousePos.y - this.y;
-            const dist = Math.hypot(dx, dy);
-            const speed = 10;
-            vx = (dx / dist) * speed;
-            vy = (dy / dist) * speed;
-        }
+            if (game.isAimUnlocked && game.mousePos) {
+                const dx = game.mousePos.x - originX;
+                const dy = game.mousePos.y - originY;
+                const dist = Math.hypot(dx, dy);
+                const speed = 10;
+                vx = (dx / dist) * speed;
+                vy = (dy / dist) * speed;
+            }
 
-        if (this.fireRate === 2) {
-             if (game.isAimUnlocked) {
-                 game.projectiles.push(new Projectile(this.x, this.y, { size: this.projectileSize, damage: this.projectileDamage, vx: vx + 1, vy: vy }));
-                 game.projectiles.push(new Projectile(this.x, this.y, { size: this.projectileSize, damage: this.projectileDamage, vx: vx - 1, vy: vy }));
-             } else {
-                game.projectiles.push(new Projectile(this.x - 7, this.y, { size: this.projectileSize, damage: this.projectileDamage }));
-                game.projectiles.push(new Projectile(this.x + 7, this.y, { size: this.projectileSize, damage: this.projectileDamage }));
-             }
-        } else {
-            game.projectiles.push(new Projectile(this.x, this.y, { size: this.projectileSize, damage: this.projectileDamage, vx, vy }));
+            if (this.fireRate === 2) {
+                if (game.isAimUnlocked) {
+                    game.projectiles.push(new Projectile(originX, originY, { size: this.projectileSize, damage: this.projectileDamage, vx: vx + 1, vy: vy }));
+                    game.projectiles.push(new Projectile(originX, originY, { size: this.projectileSize, damage: this.projectileDamage, vx: vx - 1, vy: vy }));
+                } else {
+                    game.projectiles.push(new Projectile(originX - 7, originY, { size: this.projectileSize, damage: this.projectileDamage }));
+                    game.projectiles.push(new Projectile(originX + 7, originY, { size: this.projectileSize, damage: this.projectileDamage }));
+                }
+            } else {
+                game.projectiles.push(new Projectile(originX, originY, { size: this.projectileSize, damage: this.projectileDamage, vx, vy }));
+            }
+        };
+
+        // Player shoots
+        createBullet(this.x, this.y);
+
+        // Echo shoots (if exists)
+        if (game.echoAlly) {
+            createBullet(game.echoAlly.x, game.echoAlly.y);
         }
     }
 }
@@ -150,88 +161,18 @@ export class Projectile {
         this.vx = options.vx ?? 0;
         this.vy = options.vy ?? -8;
         this.color = options.color ?? '#00ffff';
-        this.isHoming = options.isHoming ?? false;
-        this.target = null;
-        this.homingSpeed = 14; // Faster
-        this.turnRate = 8.0; // SUPER SHARP TURNING (Was 2.0)
-        
-        // LIFESPAN OPTIMIZATION
-        // Only homing missiles expire to prevent lag
-        this.lifespan = this.isHoming ? 120 : -1; // ~2 seconds at 60fps
     }
 
     draw() {
         ctx.fillStyle = this.color;
         ctx.shadowBlur = 10;
         ctx.shadowColor = this.color;
-        
-        if (this.isHoming) {
-             // Fade out when dying
-             if (this.lifespan < 20) ctx.globalAlpha = this.lifespan / 20;
-             
-             ctx.beginPath();
-             ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-             ctx.fill();
-             
-             // Simple Trail
-             ctx.fillStyle = `rgba(229, 0, 255, 0.3)`;
-             ctx.beginPath();
-             ctx.arc(this.x - this.vx * 0.2, this.y - this.vy * 0.2, this.size * 0.8, 0, Math.PI * 2);
-             ctx.fill();
-             
-             ctx.globalAlpha = 1.0; // Reset
-        } else {
-            ctx.fillRect(this.x - this.size / 2, this.y, this.size, this.size * 2);
-        }
+        ctx.fillRect(this.x - this.size / 2, this.y, this.size, this.size * 2);
         ctx.shadowBlur = 0;
     }
 
     update(game, dt) {
         const moveFactor = 60 * dt;
-        
-        if (this.isHoming) {
-            this.lifespan -= moveFactor;
-
-            // Find Target Logic - only if we don't have one or it died
-            if (!this.target || this.target.health <= 0) {
-                 let minDist = 400; // Only look for targets within range to save perf
-                 this.target = null;
-                 
-                 for (const a of game.asteroids) {
-                     if (a.health > 0) {
-                        const dist = Math.hypot(this.x - a.x, this.y - a.y);
-                        if(dist < minDist) {
-                            minDist = dist;
-                            this.target = a;
-                        }
-                     }
-                 }
-            }
-            
-            // Homing Logic
-            if (this.target) {
-                const dx = this.target.x - this.x;
-                const dy = this.target.y - this.y;
-                const dist = Math.hypot(dx, dy);
-                
-                if (dist > 0) {
-                    const targetVx = (dx / dist) * this.homingSpeed;
-                    const targetVy = (dy / dist) * this.homingSpeed;
-
-                    // Much stronger steering
-                    this.vx += (targetVx - this.vx) * this.turnRate * dt;
-                    this.vy += (targetVy - this.vy) * this.turnRate * dt;
-
-                    // Cap speed strictly
-                    const newSpeed = Math.hypot(this.vx, this.vy);
-                    if (newSpeed > 0) {
-                        this.vx = (this.vx / newSpeed) * this.homingSpeed;
-                        this.vy = (this.vy / newSpeed) * this.homingSpeed;
-                    }
-                }
-            }
-        }
-
         this.x += this.vx * moveFactor;
         this.y += this.vy * moveFactor;
     }
@@ -446,57 +387,58 @@ export class LaserAlly extends Player {
 
 // --- NEW POST-BOSS CLASSES ---
 
-export class PrismAlly {
-    constructor(game) {
+export class EchoAlly {
+    constructor() {
         this.x = canvas.width / 2;
-        this.y = canvas.height - 100;
-        this.size = 20;
-        this.angle = 0;
-        this.pulse = 0;
+        this.y = canvas.height - 40;
+        this.size = 15;
+        this.history = []; // Trail positions
+        this.delay = 10; // Frames delay
     }
 
-    draw() {
-        ctx.save();
-        ctx.translate(this.x, this.y);
-        ctx.rotate(this.angle);
-        
-        // Dynamic Glow
-        const glow = 15 + this.pulse * 10;
-        ctx.shadowBlur = glow;
-        ctx.shadowColor = '#e500ff';
-        ctx.fillStyle = `rgba(229, 0, 255, ${0.5 + this.pulse * 0.5})`;
-        ctx.strokeStyle = '#e500ff';
-        ctx.lineWidth = 2 + this.pulse * 2;
+    draw(game) {
+        if (!game.player || game.player.isDestroyed) return;
 
-        // Draw Diamond Shape
+        ctx.save();
+        ctx.globalAlpha = 0.4; // Ghostly transparent
+        
+        // Use player's rotation logic for the ghost
+        if (game && game.isAimUnlocked && game.mousePos) {
+             const angle = Math.atan2(game.mousePos.y - this.y, game.mousePos.x - this.x);
+             ctx.translate(this.x, this.y);
+             ctx.rotate(angle + Math.PI / 2); 
+             ctx.translate(-this.x, -this.y);
+        }
+
+        ctx.fillStyle = '#00ffff'; // Cyan Ghost
         ctx.beginPath();
-        ctx.moveTo(0, -this.size);
-        ctx.lineTo(this.size, 0);
-        ctx.lineTo(0, this.size);
-        ctx.lineTo(-this.size, 0);
+        ctx.moveTo(this.x, this.y + this.size * 2.2);
+        ctx.lineTo(this.x - this.size * 0.6, this.y + this.size * 1.8);
+        ctx.lineTo(this.x + this.size * 0.6, this.y + this.size * 1.8);
         ctx.closePath();
         ctx.fill();
-        ctx.stroke();
+
+        ctx.fillStyle = '#aaddff';
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(this.x - this.size, this.y + this.size * 2);
+        ctx.lineTo(this.x, this.y + this.size * 1.5);
+        ctx.lineTo(this.x + this.size, this.y + this.size * 2);
+        ctx.closePath();
+        ctx.fill();
 
         ctx.restore();
     }
 
     update(game, dt) {
-        this.angle += 0.02;
-        if (this.pulse > 0) this.pulse -= 0.1 * 60 * dt;
-        if (this.pulse < 0) this.pulse = 0;
-
-        // Follow player loosely
-        if(game.player && !game.player.isDestroyed) {
-            const targetX = game.player.x + 50; // Fly slightly to the right
-            this.x += (targetX - this.x) * 2 * dt;
-            this.y = game.player.y - 30;
+        if (game.player && !game.player.isDestroyed) {
+            // Smoothly follow player with a delay feel (Lerp)
+            const targetX = game.player.x;
+            const targetY = game.player.y + 40; // Stay slightly behind
+            
+            this.x += (targetX - this.x) * 5 * dt;
+            this.y += (targetY - this.y) * 5 * dt;
         }
-    }
-    
-    // Call when hit by player bullet
-    onHit() {
-        this.pulse = 1;
     }
 }
 
@@ -622,12 +564,44 @@ export class Asteroid {
             case 'standard': default: this.size = options.size ?? (Math.random() * 20 + 15); this.speed = Math.random() * 2 + 1; this.health = 1 * healthMultiplier; this.color = '#a9a9a9'; break;
         }
 
+        // --- RANDOMIZED SHAPE GENERATION ---
         this.shape = [];
-        const sides = 8;
+        // Default random polygon params
+        let sides = Math.floor(Math.random() * 3) + 7; // 7-9 sides
+        let jaggedness = 0.4; // How much radius varies
+
+        // Customize shapes based on type
+        if (['shard', 'shooter', 'seeker', 'weaver'].includes(this.type)) {
+            sides = 5 + Math.floor(Math.random() * 2); 
+            jaggedness = 0.6; // Spikier
+        } else if (this.type === 'bulwark') {
+            sides = 4 + Math.floor(Math.random() * 2); // Blocky/Rectangular
+            jaggedness = 0.1; // Smooth blocks
+        } else if (this.type === 'orbiter') {
+            sides = 6; // Hexagon-ish
+            jaggedness = 0.2; // Techy
+        }
+
         for (let i = 0; i < sides; i++) {
             const angle = (i / sides) * Math.PI * 2;
-            this.shape.push({ x: Math.cos(angle) * this.size, y: Math.sin(angle) * this.size });
+            
+            // Radius Logic
+            let r = this.size; 
+            if (this.type === 'seeker') {
+                 // Star shape specific for seeker
+                 r = (i % 2 === 0) ? this.size : this.size * 0.4;
+            } else if (this.type === 'shard' || this.type === 'shooter') {
+                 // Spiky crystal specific logic
+                 r = this.size * ((i % 2 === 0 ? 1 : 0.5) * (Math.random() * 0.2 + 0.9)); 
+            } else {
+                 // General Random Rock Logic
+                 // vary radius by +/- jaggedness
+                 r = this.size * (1 - jaggedness + Math.random() * jaggedness * 2);
+            }
+
+            this.shape.push({ x: Math.cos(angle) * r, y: Math.sin(angle) * r });
         }
+        // ------------------------------------
     }
 
     draw(game) {
