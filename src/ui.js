@@ -39,12 +39,6 @@ export const heatGroup = document.getElementById('heat-group');
 export const heatBar = document.getElementById('heat-bar');
 export const overheatText = document.getElementById('overheat-text');
 
-// Debug Elements
-export const debugSpawnBoss = document.getElementById('debug-spawn-boss');
-export const debugUnlockAim = document.getElementById('debug-unlock-aim');
-export const debugKillAll = document.getElementById('debug-kill-all');
-export const debugAddPoints = document.getElementById('debug-add-points');
-
 
 export function showMessage(title, text) {
     gameStatus.innerText = title;

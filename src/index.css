@@ -22,7 +22,7 @@ body {
     user-select: none;
 }
 
-/* ... (Keep existing styles for stars, scanlines, panel, container, h1, buttons, credits, loading) ... */
+/* Background Effects */
 .stars {
     position: fixed;
     top: 0;
@@ -123,6 +123,7 @@ p {
     margin: 1rem 0;
 }
 
+/* Base Button Styles */
 button {
     color: var(--text-color);
     font-family: 'Orbitron', sans-serif;
@@ -164,6 +165,7 @@ button:disabled {
     margin-top: 0;
 }
 
+
 #play-button {
     border-color: var(--secondary-color);
     box-shadow: inset 0 0 10px rgba(229, 0, 255, 0.5);
@@ -174,6 +176,7 @@ button:disabled {
     box-shadow: 0 0 15px var(--secondary-color), 0 0 25px var(--secondary-color);
 }
 
+/* Credits & Disclaimer */
 .credits {
     margin-top: 3rem;
     font-size: 0.9rem;
@@ -198,6 +201,8 @@ button:disabled {
     opacity: 0.5;
 }
 
+
+/* Loading Screen */
 .loading-container {
     position: fixed;
     top: 0;
@@ -240,6 +245,7 @@ button:disabled {
         transform: rotate(360deg);
     }
 }
+
 
 /* Game Area & HUD */
 .game-area {
@@ -332,6 +338,7 @@ canvas {
 }
 /* ---------------- */
 
+/* Fullscreen Game State */
 .game-area.fullscreen-game {
     position: fixed;
     top: 0;
@@ -368,6 +375,7 @@ canvas {
     backdrop-filter: blur(5px);
 }
 
+/* Modals */
 .message-box {
     position: fixed;
     top: 50%;
@@ -416,6 +424,7 @@ canvas {
     margin-top: 0;
 }
 
+
 .message-box button#message-button, .message-box button#continue-button, .message-box button#back-to-menu-button, #close-how-to-play-button {
     border-color: var(--secondary-color);
     box-shadow: inset 0 0 10px rgba(229, 0, 255, 0.5);
@@ -429,6 +438,7 @@ canvas {
     user-select: none;
 }
 
+/* Upgrade Modal */
 .upgrade-options {
     display: flex;
     flex-direction: column;
@@ -461,6 +471,7 @@ canvas {
     gap: 0.5rem;
 }
 
+/* How to Play Modal */
 .how-to-play-content {
     display: flex;
     flex-direction: column;
@@ -499,6 +510,8 @@ canvas {
     transform: scale(0.8);
 }
 
+
+/* Final Boss Health Bar */
 #final-boss-health-container {
     position: absolute;
     top: 10px;
@@ -520,37 +533,4 @@ canvas {
     background: linear-gradient(90deg, var(--secondary-color), var(--danger-color));
     border-radius: 8px;
     transition: width 0.2s ease-in-out;
-}
-
-#debug-panel {
-    position: fixed;
-    bottom: 10px;
-    left: 10px;
-    background: rgba(0, 0, 0, 0.8);
-    border: 1px solid var(--danger-color);
-    padding: 10px;
-    z-index: 1000;
-    border-radius: 5px;
-    opacity: 0.3;
-    transition: opacity 0.3s;
-}
-
-#debug-panel:hover {
-    opacity: 1;
-}
-
-#debug-panel h3 {
-    margin: 0 0 10px 0;
-    color: var(--danger-color);
-    font-size: 0.9rem;
-    text-align: center;
-}
-
-#debug-panel button {
-    display: block;
-    width: 100%;
-    margin: 5px 0;
-    padding: 5px;
-    font-size: 0.7rem;
-    border-color: #555;
 }

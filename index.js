@@ -165,27 +165,4 @@ window.addEventListener('DOMContentLoaded', () => {
         game.isAutoUpgradeEnabled = UI.autoUpgradeCheckbox.checked;
     });
 
-    // --- DEBUG LISTENERS ---
-    UI.debugSpawnBoss.addEventListener('click', () => {
-        if (!game.isFinalBossActive) {
-            game.gameTime = 295; // Trigger warning
-        }
-    });
-    
-    UI.debugUnlockAim.addEventListener('click', () => {
-        game.isAimUnlocked = true;
-        game.finalBossDefeated = true; // To allow new spawn logic
-        game.updateGameStatus("CHEAT: Aim Mode Unlocked!");
-    });
-    
-    UI.debugKillAll.addEventListener('click', () => {
-        game.asteroids.forEach(a => a.health = 0);
-        if (game.finalBoss) game.finalBoss.health = 0;
-    });
-
-    UI.debugAddPoints.addEventListener('click', () => {
-        game.upgradePoints += 100;
-        UI.updateUpgradePoints(game.upgradePoints);
-    });
-
 });
