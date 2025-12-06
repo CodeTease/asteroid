@@ -40,6 +40,13 @@ export const heatGroup = document.getElementById('heat-group');
 export const heatBar = document.getElementById('heat-bar');
 export const overheatText = document.getElementById('overheat-text');
 
+// Void Skill Elements
+export const voidSkillModal = document.getElementById('void-skill-modal');
+export const skillNoHeatBtn = document.getElementById('skill-no-heat');
+export const skillPermanentEchoBtn = document.getElementById('skill-permanent-echo');
+export const skillUltimateBarrageBtn = document.getElementById('skill-ultimate-barrage');
+export const hudSkillButton = document.getElementById('hud-skill-button'); // New HUD Button
+
 
 export function showMessage(title, text) {
     gameStatus.innerText = title;
@@ -79,4 +86,38 @@ export function updateUpgradeModal(points, upgrades, hasLaserAlly) {
     } else {
         laserAllyUpgradesContainer.style.display = 'none';
     }
+}
+
+export function showVoidSkillModal(onSelectCallback) {
+    voidSkillModal.classList.add('visible');
+
+    const handleSelect = (skill) => {
+        onSelectCallback(skill);
+
+        // Remove listeners to avoid duplicates if called again (though unlikely)
+        skillNoHeatBtn.onclick = null;
+        skillPermanentEchoBtn.onclick = null;
+        skillUltimateBarrageBtn.onclick = null;
+    };
+
+    skillNoHeatBtn.onclick = () => handleSelect('noHeatMode');
+    skillPermanentEchoBtn.onclick = () => handleSelect('permanentEcho');
+    skillUltimateBarrageBtn.onclick = () => handleSelect('ultimateBarrage');
+}
+
+export function hideVoidSkillModal() {
+    voidSkillModal.classList.remove('visible');
+}
+
+export function addSkillButton(skill, onClickCallback) {
+    if (skill === 'permanentEcho') return; // Passive skill, no button needed
+
+    hudSkillButton.style.display = 'block';
+    hudSkillButton.innerText = skill === 'noHeatMode' ? "🔥 NO HEAT" : "🚀 BARRAGE";
+
+    // Simple cooldown visual could be added here later
+    hudSkillButton.onclick = () => {
+        onClickCallback();
+        // Cooldown UI logic could go here
+    };
 }

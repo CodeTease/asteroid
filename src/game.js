@@ -1,5 +1,5 @@
 import * as UI from './ui.js';
-import { Player, Projectile, AIAlly, LaserAlly, EchoAlly, Coolant, Asteroid, FinalBoss, Particle, StaticMine } from './classes.js';
+import { Player, Projectile, AIAlly, LaserAlly, EchoAlly, Coolant, Asteroid, FinalBoss, Particle, StaticMine, BehemothTurret } from './classes.js';
 import { audioManager } from './audio.js';
 
 export class Game {
@@ -25,6 +25,7 @@ export class Game {
         this.allyUpgrades = {};
         this.laserAlly = null;
         this.echoAlly = null; // REPLACED PRISM WITH ECHO
+        this.echoAlly2 = null; // PERMANENT ECHO SKILL
         this.finalBoss = null;
         this.isBossActive = false;
         this.isFinalBossActive = false;
@@ -42,6 +43,15 @@ export class Game {
         this.isAimUnlocked = false;
         this.mousePos = { x: 0, y: 0 };
         this.godMode = false; // Debug
+
+        // VOID MODE SKILLS
+        this.voidSkills = {
+            noHeatMode: { active: false, timer: 0, cooldown: 120, lastUsed: -999, duration: 60 },
+            ultimateBarrage: { cooldown: 120, lastUsed: -999 },
+            permanentEcho: { acquired: false }
+        };
+        this.selectedSkill = null; // 'noHeatMode', 'permanentEcho', 'ultimateBarrage'
+        this.behemothSpawned = false;
     }
 
     start() {
@@ -84,6 +94,7 @@ export class Game {
         this.finalBoss = null;
         this.laserAlly = null;
         this.echoAlly = null;
+        this.echoAlly2 = null;
         this.upgradePoints = 0;
         this.allyUpgrades = {
             fireRateLevel: 0,
@@ -98,6 +109,14 @@ export class Game {
         this.statusMessageTimeout = null;
         
         this.isAimUnlocked = false;
+
+        this.voidSkills = {
+            noHeatMode: { active: false, timer: 0, cooldown: 120, lastUsed: -999, duration: 60 },
+            ultimateBarrage: { cooldown: 120, lastUsed: -999 },
+            permanentEcho: { acquired: false }
+        };
+        this.selectedSkill = null;
+        this.behemothSpawned = false;
 
         this.updateHUD();
         this.updateGameStatus('Ready', false);
@@ -134,11 +153,26 @@ export class Game {
         this.player.allies.forEach(p => p.update(this, dt));
         if (this.laserAlly) this.laserAlly.update(this, dt);
         if (this.echoAlly) this.echoAlly.update(this, dt);
+        if (this.echoAlly2) this.echoAlly2.update(this, dt);
 
         this.coolants.forEach((c, i) => {
              c.update(dt);
              if (c.y > UI.canvas.height) this.coolants.splice(i, 1);
         });
+
+        // VOID SKILL UPDATES
+        if (this.voidSkills.noHeatMode.active) {
+            this.voidSkills.noHeatMode.timer -= dt;
+            if (this.voidSkills.noHeatMode.timer <= 0) {
+                this.voidSkills.noHeatMode.active = false;
+                this.updateGameStatus("No Heat Mode Ended!");
+            }
+        }
+
+        // VOID MODE 100s TRIGGER
+        if (this.finalBossDefeated && this.gameTime >= 100 && !this.selectedSkill && !this.isPaused) {
+             this.showVoidSkillSelection();
+        }
 
         for (let i = this.projectiles.length - 1; i >= 0; i--) {
             const p = this.projectiles[i];
@@ -160,11 +194,11 @@ export class Game {
             const a = this.asteroids[i];
             a.update(this, dt);
             if (a.y > UI.canvas.height + a.size) {
-                if (a.isBoss && a !== this.finalBoss) {
+                if (a.isBoss && a !== this.finalBoss && a.type !== 'behemoth') {
                     this.isBossActive = false;
                     this.handleGameOver("Boss escaped!");
                     break;
-                } else {
+                } else if (a.type !== 'behemoth') {
                     this.asteroids.splice(i, 1);
                 }
             }
@@ -199,6 +233,7 @@ export class Game {
         this.player.allies.forEach(p => p.draw());
         if (this.laserAlly) this.laserAlly.draw();
         if (this.echoAlly) this.echoAlly.draw(this);
+        if (this.echoAlly2) this.echoAlly2.draw(this);
         
         this.coolants.forEach(c => c.draw());
 
@@ -254,6 +289,25 @@ export class Game {
 
         if (this.gameTime >= 300 && !this.isFinalBossActive && !this.finalBoss && !this.finalBossDefeated) {
             this.spawnBoss(true);
+        }
+
+        // VOID MODE BEHEMOTH SPAWN (at 150s Void Time)
+        if (this.finalBossDefeated && this.gameTime >= 150 && !this.behemothSpawned) {
+             this.asteroids.push(new BehemothTurret(this));
+             this.behemothSpawned = true;
+             this.isBossActive = true;
+        }
+
+        // Override for Behemoth: Allow spawning even if isBossActive, but slower
+        if (this.finalBossDefeated && this.behemothSpawned && this.isBossActive) {
+             const voidSpawnInterval = 2000; // Slower spawn rate
+             if (performance.now() - this.lastSpawnTime > voidSpawnInterval) {
+                 const enemyType = this.getSpawnType();
+                 if (enemyType) {
+                      this.asteroids.push(new Asteroid(this, { type: enemyType }));
+                 }
+                 this.lastSpawnTime = performance.now();
+             }
         }
     }
 
@@ -329,6 +383,7 @@ export class Game {
                  weights.push({ type: 'teleporter', w: 10 });
                  weights.push({ type: 'juggler', w: 15 });
                  weights.push({ type: 'sizzler', w: 15 }); // Low chance
+                 if (t >= 100) weights.push({ type: 'tanker', w: 10 }); // New Enemy (100s+)
             } else {
                  // 180s+ V-Time: Phase-in Anchor. Decrease Bulwark.
                  weights.push({ type: 'orbiter', w: 15 });
@@ -338,6 +393,10 @@ export class Game {
                  weights.push({ type: 'juggler', w: 15 });
                  weights.push({ type: 'sizzler', w: 15 });
                  weights.push({ type: 'anchor', w: 15 });
+                 if (t >= 100) {
+                    weights.push({ type: 'tanker', w: 15 });
+                    weights.push({ type: 'stunner', w: 15 }); // New Enemy (100s+)
+                 }
             }
         }
 
@@ -437,6 +496,14 @@ export class Game {
                 if (this.checkCollision(this.projectiles[i], this.asteroids[j])) {
                     const asteroid = this.asteroids[j];
                     
+                    // TANKER PARRY LOGIC (Small AI Ally projectiles)
+                    if (asteroid.type === 'tanker' && this.projectiles[i].source === 'ai_ally') {
+                         this.createExplosion(this.projectiles[i].x, this.projectiles[i].y, '#888', 5); // Grey spark
+                         this.projectiles.splice(i, 1);
+                         hitSomething = true;
+                         break;
+                    }
+
                     // BULWARK SHIELD LOGIC
                     if (asteroid.type === 'bulwark') {
                         // Better: If player is below bulwark (y > asteroid.y), shield blocks.
@@ -451,7 +518,13 @@ export class Game {
 
 
                     this.createExplosion(asteroid.x, asteroid.y, asteroid.color, 5);
-                    asteroid.health -= this.projectiles[i].damage;
+
+                    let damage = this.projectiles[i].damage;
+
+                    // VOID MODE GLOBAL DAMAGE BUFF (x2) - STARTS AT 100s+
+                    if (this.finalBossDefeated && this.gameTime >= 100) damage *= 2;
+
+                    asteroid.health -= damage;
 
                     // ANCHOR PROTECTION LOGIC
                     if (asteroid.protectedBy && asteroid.health <= 1) {
@@ -499,9 +572,11 @@ export class Game {
                 this.echoAlly = new EchoAlly();
                 this.updateGameStatus("Echo Ally Acquired!");
 
+                // Upgrade modal if needed, but Skill Selection comes later at 100s
                 if (!this.areAllUpgradesMaxed()) {
                     this.isAutoUpgradeEnabled ? this.autoUpgradeAllies() : this.showUpgradeModal();
                 }
+
             }
         } else {
             this.createExplosion(asteroid.x, asteroid.y, asteroid.color, asteroid.size);
@@ -649,6 +724,92 @@ export class Game {
                 UI.gameStatus.style.opacity = '0';
             }, 2500);
         }
+    }
+
+    // VOID SKILL METHODS
+    showVoidSkillSelection() {
+        this.isPaused = true;
+        UI.showVoidSkillModal((skill) => {
+            this.selectVoidSkill(skill);
+            UI.hideVoidSkillModal();
+            this.isPaused = false;
+            this.lastTime = performance.now();
+        });
+    }
+
+    selectVoidSkill(skill) {
+        this.selectedSkill = skill;
+        this.updateGameStatus(`Skill Selected: ${skill}`);
+
+        if (skill === 'permanentEcho') {
+             this.voidSkills.permanentEcho.acquired = true;
+             this.echoAlly2 = new EchoAlly();
+             this.updateGameStatus("Second Echo Ally Acquired!");
+        }
+
+        // Add skill button to HUD or Key listener
+        UI.addSkillButton(skill, () => this.activateSkill());
+    }
+
+    activateSkill() {
+        const now = this.gameTime;
+        const skill = this.selectedSkill;
+
+        if (!skill) return;
+
+        if (skill === 'noHeatMode') {
+             if (now - this.voidSkills.noHeatMode.lastUsed >= this.voidSkills.noHeatMode.cooldown) {
+                 this.voidSkills.noHeatMode.active = true;
+                 this.voidSkills.noHeatMode.timer = this.voidSkills.noHeatMode.duration;
+                 this.voidSkills.noHeatMode.lastUsed = now;
+                 this.player.heat = 0;
+                 this.player.isOverheated = false;
+                 this.updateGameStatus("NO HEAT MODE ACTIVATED!");
+                 audioManager.playSound('Playerupgraded');
+             } else {
+                 this.updateGameStatus("Skill on Cooldown!");
+             }
+        } else if (skill === 'ultimateBarrage') {
+             if (now - this.voidSkills.ultimateBarrage.lastUsed >= this.voidSkills.ultimateBarrage.cooldown) {
+                 this.voidSkills.ultimateBarrage.lastUsed = now;
+                 this.fireUltimateBarrage();
+                 this.updateGameStatus("ULTIMATE BARRAGE!");
+                 audioManager.playSound('finalbossExplosion');
+             } else {
+                  this.updateGameStatus("Skill on Cooldown!");
+             }
+        }
+    }
+
+    fireUltimateBarrage() {
+        // Clear screen logic or massive damage
+        // Let's spawn 50 projectiles in all directions
+        const count = 50;
+        for (let i = 0; i < count; i++) {
+            const angle = (i / count) * Math.PI * 2;
+            const speed = 10;
+            const vx = Math.cos(angle) * speed;
+            const vy = Math.sin(angle) * speed;
+            this.projectiles.push(new Projectile(this.player.x, this.player.y, {
+                vx, vy,
+                size: 8,
+                damage: 50, // Massive damage
+                color: '#fff'
+            }));
+        }
+        // Also wipe small enemies
+        for (let i = this.asteroids.length - 1; i >= 0; i--) {
+            const a = this.asteroids[i];
+            if (!a.isBoss) {
+                 a.health -= 50;
+                 if (a.health <= 0) this.handleAsteroidDestruction(a, i);
+            }
+        }
+        this.screenShakeDuration = 30;
+    }
+
+    get isNoHeatMode() {
+        return this.voidSkills.noHeatMode.active;
     }
 
     resizeCanvas() {

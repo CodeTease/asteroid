@@ -34,6 +34,7 @@
     </div>
 
     <div class="game-area" id="game-area">
+        <button id="hud-skill-button" style="display: none;">SKILL</button>
         <div id="debug-panel" class="hidden">
             <h3>Debug Panel</h3>
             <button id="debug-time-plus">+60s Time</button>
@@ -123,6 +124,27 @@
             <label for="auto-upgrade-checkbox">Auto Upgrade</label>
         </div>
         <button id="continue-button">Continue</button>
+    </div>
+
+    <div id="void-skill-modal" class="message-box unselectable">
+        <h2 style="color: #a020f0; text-shadow: 0 0 10px #a020f0;">VOID MODE REACHED</h2>
+        <p>Choose a Special Skill to survive the Void.</p>
+        <div class="upgrade-options">
+             <div class="upgrade-category">
+                <button id="skill-no-heat" class="void-skill-btn">
+                    <strong>No Heat Mode</strong><br>
+                    <span style="font-size: 0.8em;">Disable Heat for 60s. (2m Cooldown)</span>
+                </button>
+                <button id="skill-permanent-echo" class="void-skill-btn">
+                    <strong>Permanent Echo</strong><br>
+                    <span style="font-size: 0.8em;">Spawn a second Echo Ally permanently.</span>
+                </button>
+                <button id="skill-ultimate-barrage" class="void-skill-btn">
+                    <strong>Ultimate Barrage</strong><br>
+                    <span style="font-size: 0.8em;">Clear the screen with massive fire. (2m Cooldown)</span>
+                </button>
+            </div>
+        </div>
     </div>
 
     <div id="how-to-play-modal" class="message-box unselectable">

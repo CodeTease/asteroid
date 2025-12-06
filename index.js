@@ -178,6 +178,17 @@ window.addEventListener('DOMContentLoaded', () => {
     const debugAddScore = document.getElementById('debug-add-score');
     const debugGodMode = document.getElementById('debug-god-mode');
 
+    // Make Void Enemies Selectable in Debug
+    const voidEnemies = ['tanker', 'stunner', 'behemoth'];
+    voidEnemies.forEach(type => {
+        if (!debugEnemySelect.querySelector(`option[value="${type}"]`)) {
+            const opt = document.createElement('option');
+            opt.value = type;
+            opt.innerText = type.charAt(0).toUpperCase() + type.slice(1);
+            debugEnemySelect.appendChild(opt);
+        }
+    });
+
     debugToggle.addEventListener('click', () => {
         debugPanel.classList.toggle('hidden');
     });

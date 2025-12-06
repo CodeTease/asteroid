@@ -20,6 +20,9 @@ export class Player {
         this.isDestroyed = false;
         this.shieldCharges = 0;
         
+        this.isStunned = false;
+        this.stunTimer = 0;
+
         // Heat System
         this.heat = 0;
         this.maxHeat = 100;
@@ -104,7 +107,12 @@ export class Player {
         if (!this.isOverheated && this.heat > 0) {
             // Check for Sizzler
             const hasSizzler = game.asteroids.some(a => a.type === 'sizzler');
-            const decayRate = hasSizzler ? 20 : 40; // 50% reduced decay if Sizzler present
+            // Check for BehemothTurret
+            const hasBehemoth = game.asteroids.some(a => a instanceof BehemothTurret);
+
+            let decayRate = 40;
+            if (hasSizzler) decayRate = 20;
+            if (hasBehemoth) decayRate = 10; // Behemoth significantly reduces cooling
 
             this.heat -= decayRate * dt; // Decay speed
             if (this.heat < 0) this.heat = 0;
@@ -115,10 +123,15 @@ export class Player {
         if (game.isGameOver || game.isPaused || this.isOverheated) return;
 
         // Heat Build-up
-        if (game.isAimUnlocked) {
+        if (game.isAimUnlocked && !game.isNoHeatMode) {
             // Check for Sizzler
             const hasSizzler = game.asteroids.some(a => a.type === 'sizzler');
-            const heatGen = hasSizzler ? 12 : 10; // 20% increased heat generation if Sizzler present
+             // Check for BehemothTurret
+            const hasBehemoth = game.asteroids.some(a => a instanceof BehemothTurret);
+
+            let heatGen = 10;
+            if (hasSizzler) heatGen = 12;
+            if (hasBehemoth) heatGen = 15; // Behemoth increases heat generation
 
             this.heat += heatGen;
             if (this.heat >= this.maxHeat) {
@@ -136,7 +149,7 @@ export class Player {
         audioManager.playSound('shoot', 0.5);
 
         // Helper to create bullets
-        const createBullet = (originX, originY) => {
+        const createBullet = (originX, originY, source = 'player') => {
             let vx = 0;
             let vy = -8;
 
@@ -151,23 +164,27 @@ export class Player {
 
             if (this.fireRate === 2) {
                 if (game.isAimUnlocked) {
-                    game.projectiles.push(new Projectile(originX, originY, { size: this.projectileSize, damage: this.projectileDamage, vx: vx + 1, vy: vy }));
-                    game.projectiles.push(new Projectile(originX, originY, { size: this.projectileSize, damage: this.projectileDamage, vx: vx - 1, vy: vy }));
+                    game.projectiles.push(new Projectile(originX, originY, { size: this.projectileSize, damage: this.projectileDamage, vx: vx + 1, vy: vy, source: source }));
+                    game.projectiles.push(new Projectile(originX, originY, { size: this.projectileSize, damage: this.projectileDamage, vx: vx - 1, vy: vy, source: source }));
                 } else {
-                    game.projectiles.push(new Projectile(originX - 7, originY, { size: this.projectileSize, damage: this.projectileDamage }));
-                    game.projectiles.push(new Projectile(originX + 7, originY, { size: this.projectileSize, damage: this.projectileDamage }));
+                    game.projectiles.push(new Projectile(originX - 7, originY, { size: this.projectileSize, damage: this.projectileDamage, source: source }));
+                    game.projectiles.push(new Projectile(originX + 7, originY, { size: this.projectileSize, damage: this.projectileDamage, source: source }));
                 }
             } else {
-                game.projectiles.push(new Projectile(originX, originY, { size: this.projectileSize, damage: this.projectileDamage, vx, vy }));
+                game.projectiles.push(new Projectile(originX, originY, { size: this.projectileSize, damage: this.projectileDamage, vx, vy, source: source }));
             }
         };
 
         // Player shoots
-        createBullet(this.x, this.y);
+        createBullet(this.x, this.y, 'player');
 
         // Echo shoots (if exists)
-        if (game.echoAlly) {
-            createBullet(game.echoAlly.x, game.echoAlly.y);
+        if (game.echoAlly && !game.echoAlly.isStunned) {
+            createBullet(game.echoAlly.x, game.echoAlly.y, 'echo');
+        }
+        // Second Echo (Permanent Echo Skill)
+        if (game.echoAlly2 && !game.echoAlly2.isStunned) {
+            createBullet(game.echoAlly2.x, game.echoAlly2.y, 'echo');
         }
     }
 }
@@ -181,6 +198,7 @@ export class Projectile {
         this.vx = options.vx ?? 0;
         this.vy = options.vy ?? -8;
         this.color = options.color ?? '#00ffff';
+        this.source = options.source ?? 'player'; // 'player', 'echo', 'ai_ally'
     }
 
     draw() {
@@ -216,13 +234,19 @@ export class AIAlly extends Player {
         if (this.y < -this.size * 2) return;
         ctx.save();
         ctx.globalAlpha = this.alpha;
-        ctx.fillStyle = '#007bff';
+        ctx.fillStyle = this.isStunned ? '#555' : '#007bff'; // Grey when stunned
         ctx.beginPath();
         ctx.moveTo(this.x, this.y);
         ctx.lineTo(this.x - this.size, this.y + this.size * 2);
         ctx.lineTo(this.x + this.size, this.y + this.size * 2);
         ctx.closePath();
         ctx.fill();
+
+        if (this.isStunned) {
+             ctx.fillStyle = 'yellow';
+             ctx.font = '12px Arial';
+             ctx.fillText("⚡", this.x - 4, this.y - 10);
+        }
         ctx.restore();
     }
     update(game, dt) {
@@ -230,6 +254,13 @@ export class AIAlly extends Player {
             this.y -= this.speed * 60 * dt;
             return;
         }
+
+        if (this.isStunned) {
+            this.stunTimer -= dt;
+            if (this.stunTimer <= 0) this.isStunned = false;
+            return;
+        }
+
         const patrolCenterX = this.side === 'left' ? canvas.width / 4 : canvas.width * 3 / 4;
         const patrolRange = canvas.width / 5;
         this.x = patrolCenterX + Math.sin(Date.now() / 800) * (patrolRange / 2);
@@ -269,7 +300,7 @@ export class AIAlly extends Player {
         const dist = Math.hypot(dx, dy);
         const baseSpeed = 8;
         const speed = game.allyUpgrades.hasFasterProjectiles ? baseSpeed * 1.5 : baseSpeed;
-        const projectileOptions = { size: this.projectileSize, damage: this.projectileDamage };
+        const projectileOptions = { size: this.projectileSize, damage: this.projectileDamage, source: 'ai_ally' };
         if (game.allyUpgrades.hasDoubleShot) {
             const angle = Math.atan2(dy, dx);
             const spread = Math.PI / 18;
@@ -305,6 +336,23 @@ export class LaserAlly extends Player {
         if (this.y < -this.size * 2) return;
         const now = Date.now();
         const isOnCooldown = now - this.lastFireStopTime < this.cooldownDuration;
+
+        if (this.isStunned) {
+             ctx.save();
+             ctx.fillStyle = '#555';
+             ctx.beginPath();
+             ctx.moveTo(this.x, this.y);
+             ctx.lineTo(this.x - this.size, this.y + this.size * 2);
+             ctx.lineTo(this.x + this.size, this.y + this.size * 2);
+             ctx.closePath();
+             ctx.fill();
+             ctx.fillStyle = 'yellow';
+             ctx.font = '20px Arial';
+             ctx.fillText("⚡", this.x - 7, this.y + 20);
+             ctx.restore();
+             return;
+        }
+
         if (isOnCooldown && !this.isFiring) {
             ctx.save();
             const cooldownProgress = (now - this.lastFireStopTime) / this.cooldownDuration;
@@ -356,6 +404,17 @@ export class LaserAlly extends Player {
             }
             return;
         }
+
+        if (this.isStunned) {
+            this.stunTimer -= dt;
+            if (this.isFiring) {
+                audioManager.stopLoopingSound('laseringSound');
+                this.isFiring = false;
+            }
+            if (this.stunTimer <= 0) this.isStunned = false;
+            return;
+        }
+
         this.x = canvas.width / 2;
         const now = Date.now();
         const isOnCooldown = now - this.lastFireStopTime < this.cooldownDuration;
@@ -377,21 +436,53 @@ export class LaserAlly extends Player {
         }
         if (this.isFiring) {
             let bestTarget = null;
-            if (game.isFinalBossActive && game.finalBoss) {
-                bestTarget = game.finalBoss;
-            } else {
+
+            // PRIORITY TARGETING FOR LASER ALLY (Stunner first)
+            const stunners = game.asteroids.filter(a => a.type === 'stunner');
+            if (stunners.length > 0) {
+                 // Pick closest stunner
                 let minDistance = Infinity;
-                for (const asteroid of game.asteroids) {
-                    const distance = Math.hypot(this.x - asteroid.x, this.y - asteroid.y);
+                for (const stunner of stunners) {
+                    const distance = Math.hypot(this.x - stunner.x, this.y - stunner.y);
                     if (distance < minDistance) {
                         minDistance = distance;
-                        bestTarget = asteroid;
+                        bestTarget = stunner;
                     }
                 }
             }
+
+            if (!bestTarget) {
+                if (game.isFinalBossActive && game.finalBoss) {
+                    bestTarget = game.finalBoss;
+                } else if (game.isBossActive) {
+                    // Target mini-bosses (like BehemothTurret)
+                    bestTarget = game.asteroids.find(a => a.isBoss);
+                }
+
+                if (!bestTarget) {
+                    let minDistance = Infinity;
+                    for (const asteroid of game.asteroids) {
+                        const distance = Math.hypot(this.x - asteroid.x, this.y - asteroid.y);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            bestTarget = asteroid;
+                        }
+                    }
+                }
+            }
+
             if (bestTarget) {
                 this.laserTarget = { x: bestTarget.x, y: bestTarget.y };
-                bestTarget.health -= this.laserDamage * dt;
+
+                // Damage Logic
+                // Tanker takes 50% damage from Laser Ally
+                let damageMultiplier = 1;
+                if (bestTarget.type === 'tanker') damageMultiplier = 0.5;
+
+                // Void Mode Global Buff: x2 Damage (Starts at 100s+)
+                if (game.finalBossDefeated && game.gameTime >= 100) damageMultiplier *= 2;
+
+                bestTarget.health -= this.laserDamage * dt * damageMultiplier;
             } else {
                 this.laserTarget = null;
             }
@@ -413,6 +504,8 @@ export class EchoAlly {
         this.y = canvas.height - 100; // Start higher
         this.size = 15;
         this.floatTimer = 0; // For sine wave animation
+        this.isStunned = false;
+        this.stunTimer = 0;
     }
 
     draw(game) {
@@ -420,16 +513,20 @@ export class EchoAlly {
 
         ctx.save();
         ctx.globalAlpha = 0.4; // Ghostly transparent
-        
-        // Use player's rotation logic for the ghost
-        if (game && game.isAimUnlocked && game.mousePos) {
-             const angle = Math.atan2(game.mousePos.y - this.y, game.mousePos.x - this.x);
-             ctx.translate(this.x, this.y);
-             ctx.rotate(angle + Math.PI / 2); 
-             ctx.translate(-this.x, -this.y);
+        if (this.isStunned) {
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = '#555'; // Grey when stunned
+        } else {
+            // Use player's rotation logic for the ghost
+            if (game && game.isAimUnlocked && game.mousePos) {
+                 const angle = Math.atan2(game.mousePos.y - this.y, game.mousePos.x - this.x);
+                 ctx.translate(this.x, this.y);
+                 ctx.rotate(angle + Math.PI / 2);
+                 ctx.translate(-this.x, -this.y);
+            }
+            ctx.fillStyle = '#00ffff'; // Cyan Ghost
         }
 
-        ctx.fillStyle = '#00ffff'; // Cyan Ghost
         ctx.beginPath();
         ctx.moveTo(this.x, this.y + this.size * 2.2);
         ctx.lineTo(this.x - this.size * 0.6, this.y + this.size * 1.8);
@@ -437,7 +534,7 @@ export class EchoAlly {
         ctx.closePath();
         ctx.fill();
 
-        ctx.fillStyle = '#aaddff';
+        if (!this.isStunned) ctx.fillStyle = '#aaddff';
         ctx.beginPath();
         ctx.moveTo(this.x, this.y);
         ctx.lineTo(this.x - this.size, this.y + this.size * 2);
@@ -450,6 +547,11 @@ export class EchoAlly {
     }
 
     update(game, dt) {
+        if (this.isStunned) {
+             this.stunTimer -= dt;
+             if (this.stunTimer <= 0) this.isStunned = false;
+        }
+
         if (game.player && !game.player.isDestroyed) {
             this.floatTimer += dt;
             
@@ -595,6 +697,12 @@ export class Asteroid {
             case 'anchor': // NEW VOID LEGION
                 this.size = 15; this.speed = 4; this.health = 3 * healthMultiplier; this.color = '#ffffff'; // White
                 break;
+            case 'tanker': // NEW VOID LEGION
+                this.size = 45; this.speed = 1; this.health = 30 * healthMultiplier; this.color = '#8B4513'; // SaddleBrown
+                break;
+            case 'stunner': // NEW VOID LEGION
+                this.size = 30; this.speed = 0.5; this.health = 15 * healthMultiplier; this.color = '#FFFFE0'; // LightYellow
+                break;
             // ... (Existing types kept same) ...
             case 'scout': this.size = 12; this.speed = Math.random() * 2 + 2.5; this.health = 1 * healthMultiplier; this.color = '#add8e6'; break;
             case 'brute': this.size = 35; this.speed = Math.random() * 1 + 0.8; this.health = 2 * healthMultiplier; this.color = '#d2b48c'; break;
@@ -633,6 +741,12 @@ export class Asteroid {
         } else if (this.type === 'anchor') {
             sides = 4; // Diamond/Cross
             jaggedness = 0.5;
+        } else if (this.type === 'tanker') {
+            sides = 8; // Octagon
+            jaggedness = 0.1;
+        } else if (this.type === 'stunner') {
+             sides = 5; // Pentagon
+             jaggedness = 0.1;
         }
 
         for (let i = 0; i < sides; i++) {
@@ -899,6 +1013,130 @@ export class Asteroid {
             game.enemyProjectiles.push(new Projectile(this.x, this.y, { vx, vy, color: '#ff69b4', size: 4 }));
             audioManager.playSound('enemyShoot', 0.4);
             this.lastFireTime = Date.now();
+        }
+
+        // Stunner Logic
+        if (this.type === 'stunner' && !game.isGameOver && Date.now() - this.lastFireTime > 5000) { // Fires every 5s
+             // Find target: Random Ally or Player if no allies
+             const targets = [...game.player.allies];
+             if (game.laserAlly) targets.push(game.laserAlly);
+             if (game.echoAlly) targets.push(game.echoAlly);
+             if (game.echoAlly2) targets.push(game.echoAlly2);
+
+             if (targets.length > 0) {
+                 const target = targets[Math.floor(Math.random() * targets.length)];
+                 // Instant hit stun beam (visual effect handled here or in draw?)
+                 // Let's create a visual projectile but instant effect
+                 target.isStunned = true;
+                 target.stunTimer = 5; // 5 seconds
+
+                 // Create Stun Beam Effect
+                 game.particles.push(new Particle(this.x, this.y, '#ffff00')); // Simple placeholder
+
+                 // Draw beam (hacky: create a fast temporary projectile or just draw in its draw method?)
+                 // Let's create a special projectile that is just visual
+                 game.enemyProjectiles.push(new Projectile(this.x, this.y, { vx: 0, vy: 0, color: 'transparent', size: 0 })); // dummy
+                 // Actually, let's just use game.createExplosion for visual feedback on target
+                 game.createExplosion(target.x, target.y, '#ffff00', 10);
+                 game.updateGameStatus("Ally Stunned!");
+
+                 this.lastFireTime = Date.now();
+             }
+        }
+    }
+}
+
+export class BehemothTurret extends Asteroid {
+    constructor(game) {
+        super(game, { isBoss: true });
+        this.size = 80;
+        this.x = canvas.width / 2;
+        this.y = -this.size;
+        this.speed = 0.5;
+        this.health = 2000;
+        this.maxHealth = 2000;
+        this.color = '#800000'; // Maroon
+        this.type = 'behemoth';
+
+        this.phase = 'enter'; // enter, attack, idle
+        this.phaseTimer = 0;
+        this.targetY = 100;
+        this.gunAngle = 0;
+    }
+
+    draw(game) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // Body
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.rect(-this.size, -this.size/2, this.size * 2, this.size);
+        ctx.fill();
+        ctx.strokeStyle = '#ff0000';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Guns
+        ctx.fillStyle = '#333';
+        ctx.fillRect(-this.size - 20, 0, 20, 40); // Left gun
+        ctx.fillRect(this.size, 0, 20, 40); // Right gun
+
+        // Heat Aura
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = 'orange';
+        ctx.beginPath();
+        ctx.arc(0, 0, this.size * 1.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+
+        // Health bar
+         const barWidth = 100;
+         const barHeight = 10;
+         const healthPercent = this.health / this.maxHealth;
+         ctx.fillStyle = 'red';
+         ctx.fillRect(this.x - barWidth/2, this.y - this.size - 20, barWidth * healthPercent, barHeight);
+         ctx.strokeStyle = 'white';
+         ctx.strokeRect(this.x - barWidth/2, this.y - this.size - 20, barWidth, barHeight);
+    }
+
+    update(game, dt) {
+        if (this.phase === 'enter') {
+            this.y += this.speed * 60 * dt;
+            if (this.y >= this.targetY) {
+                this.y = this.targetY;
+                this.phase = 'attack';
+                this.phaseTimer = 10; // 10s attack
+                game.updateGameStatus("Behemoth Turret Active!");
+                game.screenShakeDuration = 20;
+            }
+        } else if (this.phase === 'attack') {
+            this.phaseTimer -= dt;
+
+            // Wobble
+            this.x += Math.sin(Date.now() / 500) * 0.5;
+
+            // Shoot continuously
+            if (Math.floor(Date.now() / 100) % 2 === 0) { // Every 200ms approx
+                const bulletSpeed = 5;
+                // Left gun
+                game.enemyProjectiles.push(new Projectile(this.x - this.size - 10, this.y + 20, { vx: 0, vy: bulletSpeed, color: 'orange', size: 6 }));
+                // Right gun
+                game.enemyProjectiles.push(new Projectile(this.x + this.size + 10, this.y + 20, { vx: 0, vy: bulletSpeed, color: 'orange', size: 6 }));
+            }
+
+            if (this.phaseTimer <= 0) {
+                this.phase = 'idle';
+                this.phaseTimer = 15; // 15s idle
+            }
+        } else if (this.phase === 'idle') {
+            this.phaseTimer -= dt;
+            // Regen? Or just sit there.
+            if (this.phaseTimer <= 0) {
+                this.phase = 'attack';
+                this.phaseTimer = 10;
+            }
         }
     }
 }
