@@ -121,3 +121,17 @@ export function addSkillButton(skill, onClickCallback) {
         // Cooldown UI logic could go here
     };
 }
+
+export function updateSkillButton(text) {
+    if (hudSkillButton) {
+        hudSkillButton.innerText = text;
+        // Optionally dim button if cooldown
+        if (text.includes("Cooldown") || text.includes("ACTIVE")) {
+             hudSkillButton.style.opacity = "0.7";
+             hudSkillButton.style.cursor = "default";
+        } else {
+             hudSkillButton.style.opacity = "1";
+             hudSkillButton.style.cursor = "pointer";
+        }
+    }
+}

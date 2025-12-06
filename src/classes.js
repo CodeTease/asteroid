@@ -629,6 +629,82 @@ export class StaticMine {
     }
 }
 
+export class BehemothBomb {
+    constructor(x, y, targetX, targetY) {
+        this.x = x;
+        this.y = y;
+        this.targetX = targetX;
+        this.targetY = targetY;
+        this.size = 20;
+        this.speed = 1.5;
+        this.color = '#ff4500';
+        this.isExploding = false;
+        this.explosionRadius = 150;
+        this.explodeTimer = 0;
+    }
+
+    draw() {
+        if (this.isExploding) {
+            ctx.save();
+            ctx.fillStyle = `rgba(255, 69, 0, ${0.5 + Math.sin(Date.now() / 50) * 0.5})`;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.explosionRadius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        } else {
+            ctx.save();
+            ctx.fillStyle = this.color;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = 'red';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fill();
+            // Pulse center
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size * 0.5 * (1 + Math.sin(Date.now() / 100) * 0.3), 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+
+    update(game, dt) {
+        if (this.isExploding) {
+            this.explodeTimer -= dt;
+            if (this.explodeTimer <= 0) return true; // Signal to remove
+
+            // Damage check (simple: if player in radius)
+            const dist = Math.hypot(game.player.x - this.x, game.player.y - this.y);
+            if (dist < this.explosionRadius && !game.player.isDestroyed) {
+                // Break shields instantly or kill
+                if (game.player.shieldCharges > 0) {
+                    game.player.shieldCharges = 0;
+                    game.updateGameStatus("SHIELD BROKEN BY BOMB!");
+                    game.screenShakeDuration = 20;
+                } else {
+                    game.handleGameOver("Obliterated by Behemoth Bomb!");
+                }
+            }
+            return false;
+        }
+
+        const dx = this.targetX - this.x;
+        const dy = this.targetY - this.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist < 5) {
+            this.isExploding = true;
+            this.explodeTimer = 1; // Lasts 1s
+            game.screenShakeDuration = 10;
+            audioManager.playSound('finalbossExplosion');
+        } else {
+            this.x += (dx / dist) * this.speed * 60 * dt;
+            this.y += (dy / dist) * this.speed * 60 * dt;
+        }
+        return false;
+    }
+}
+
 export class Asteroid {
     constructor(game, options = {}) {
         this.isBoss = options.isBoss ?? false;
@@ -1062,6 +1138,8 @@ export class BehemothTurret extends Asteroid {
         this.phaseTimer = 0;
         this.targetY = 100;
         this.gunAngle = 0;
+        this.bombCooldown = 5000;
+        this.lastBombTime = 0;
     }
 
     draw(game) {
@@ -1117,13 +1195,32 @@ export class BehemothTurret extends Asteroid {
             // Wobble
             this.x += Math.sin(Date.now() / 500) * 0.5;
 
-            // Shoot continuously
-            if (Math.floor(Date.now() / 100) % 2 === 0) { // Every 200ms approx
-                const bulletSpeed = 5;
-                // Left gun
-                game.enemyProjectiles.push(new Projectile(this.x - this.size - 10, this.y + 20, { vx: 0, vy: bulletSpeed, color: 'orange', size: 6 }));
-                // Right gun
-                game.enemyProjectiles.push(new Projectile(this.x + this.size + 10, this.y + 20, { vx: 0, vy: bulletSpeed, color: 'orange', size: 6 }));
+            // Aimed Shots Logic
+            if (game.player && !game.player.isDestroyed) {
+                if (Math.floor(Date.now() / 100) % 2 === 0) { // High frequency (approx every 200ms)
+                    const speed = 7;
+
+                    // Left Gun Aim
+                    const angleL = Math.atan2(game.player.y - (this.y + 20), game.player.x - (this.x - this.size - 10));
+                    const vxL = Math.cos(angleL) * speed;
+                    const vyL = Math.sin(angleL) * speed;
+                    game.enemyProjectiles.push(new Projectile(this.x - this.size - 10, this.y + 20, { vx: vxL, vy: vyL, color: 'orange', size: 6 }));
+
+                    // Right Gun Aim
+                    const angleR = Math.atan2(game.player.y - (this.y + 20), game.player.x - (this.x + this.size + 10));
+                    const vxR = Math.cos(angleR) * speed;
+                    const vyR = Math.sin(angleR) * speed;
+                    game.enemyProjectiles.push(new Projectile(this.x + this.size + 10, this.y + 20, { vx: vxR, vy: vyR, color: 'orange', size: 6 }));
+                }
+            }
+
+            // Bomb Skill
+            if (Date.now() - this.lastBombTime > this.bombCooldown) {
+                const targetX = Math.random() * (canvas.width - 40) + 20;
+                const targetY = Math.random() * (canvas.height - 100) + 100;
+                game.enemyProjectiles.push(new BehemothBomb(this.x, this.y, targetX, targetY));
+                this.lastBombTime = Date.now();
+                game.updateGameStatus("Behemoth Launching Bomb!");
             }
 
             if (this.phaseTimer <= 0) {

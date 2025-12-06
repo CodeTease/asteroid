@@ -1,5 +1,5 @@
 import * as UI from './ui.js';
-import { Player, Projectile, AIAlly, LaserAlly, EchoAlly, Coolant, Asteroid, FinalBoss, Particle, StaticMine, BehemothTurret } from './classes.js';
+import { Player, Projectile, AIAlly, LaserAlly, EchoAlly, Coolant, Asteroid, FinalBoss, Particle, StaticMine, BehemothTurret, BehemothBomb } from './classes.js';
 import { audioManager } from './audio.js';
 
 export class Game {
@@ -162,7 +162,26 @@ export class Game {
              if (c.y > UI.canvas.height) this.coolants.splice(i, 1);
         });
 
-        // VOID SKILL UPDATES
+        // VOID SKILL UPDATES & UI COOLDOWN
+        let skillText = null;
+        if (this.selectedSkill) {
+            const skill = this.voidSkills[this.selectedSkill];
+            if (this.selectedSkill === 'noHeatMode') {
+                if (skill.active) {
+                    skillText = `ACTIVE (${Math.ceil(skill.timer)}s)`;
+                } else {
+                    const cooldownLeft = Math.max(0, skill.cooldown - (this.gameTime - skill.lastUsed));
+                    if (cooldownLeft > 0) skillText = `Cooldown: ${Math.ceil(cooldownLeft)}s`;
+                    else skillText = "🔥 NO HEAT";
+                }
+            } else if (this.selectedSkill === 'ultimateBarrage') {
+                const cooldownLeft = Math.max(0, skill.cooldown - (this.gameTime - skill.lastUsed));
+                if (cooldownLeft > 0) skillText = `Cooldown: ${Math.ceil(cooldownLeft)}s`;
+                else skillText = "🚀 BARRAGE";
+            }
+            if (skillText) UI.updateSkillButton(skillText);
+        }
+
         if (this.voidSkills.noHeatMode.active) {
             this.voidSkills.noHeatMode.timer -= dt;
             if (this.voidSkills.noHeatMode.timer <= 0) {
@@ -187,7 +206,17 @@ export class Game {
         }
         for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
             const p = this.enemyProjectiles[i];
-            p.update(this, dt);
+
+            // Behemoth Bomb Special Logic (returns true if it exploded/expired)
+            if (p instanceof BehemothBomb) {
+                if (p.update(this, dt)) {
+                    this.enemyProjectiles.splice(i, 1);
+                    continue;
+                }
+            } else {
+                p.update(this, dt);
+            }
+
             if (p.y < 0 || p.y > UI.canvas.height || p.x < 0 || p.x > UI.canvas.width) {
                 this.enemyProjectiles.splice(i, 1);
             }
@@ -196,6 +225,11 @@ export class Game {
             const a = this.asteroids[i];
             a.update(this, dt);
             if (a.y > UI.canvas.height + a.size) {
+                // ORBITER FIX: Don't kill orbiter if it's orbiting (it might dip below screen)
+                if (a.type === 'orbiter' && a.isOrbiting) {
+                    continue;
+                }
+
                 if (a.isBoss && a !== this.finalBoss && a.type !== 'behemoth') {
                     this.isBossActive = false;
                     this.handleGameOver("Boss escaped!");
@@ -466,6 +500,8 @@ export class Game {
         // Player vs Enemy Projectiles
         for (let j = this.enemyProjectiles.length - 1; j >= 0; j--) {
             const p = this.enemyProjectiles[j];
+            if (p instanceof BehemothBomb) continue; // Bomb handles its own collision in update
+
             if (this.checkCollision(this.player, p)) {
                 if (this.godMode) return; // God Mode Check
 
@@ -502,6 +538,14 @@ export class Game {
                 if (this.checkCollision(this.projectiles[i], this.asteroids[j])) {
                     const asteroid = this.asteroids[j];
                     
+                    // BEHEMOTH LOGIC (AI Ally Immunity)
+                    if (asteroid.type === 'behemoth' && this.projectiles[i].source === 'ai_ally') {
+                        this.createExplosion(this.projectiles[i].x, this.projectiles[i].y, '#888', 5);
+                        this.projectiles.splice(i, 1);
+                        hitSomething = true;
+                        break;
+                    }
+
                     // TANKER PARRY LOGIC (Small AI Ally projectiles)
                     if (asteroid.type === 'tanker' && this.projectiles[i].source === 'ai_ally') {
                          this.createExplosion(this.projectiles[i].x, this.projectiles[i].y, '#888', 5); // Grey spark
@@ -789,30 +833,40 @@ export class Game {
     }
 
     fireUltimateBarrage() {
-        // Clear screen logic or massive damage
-        // Let's spawn 50 projectiles in all directions
-        const count = 50;
+        // Ultimate Barrage Buff: Massive Spiral + Random Spread
+        const count = 100;
+        const playerX = this.player.x;
+        const playerY = this.player.y;
+
         for (let i = 0; i < count; i++) {
-            const angle = (i / count) * Math.PI * 2;
-            const speed = 10;
+            // Spiral Pattern
+            const angle = (i / count) * Math.PI * 4; // 2 rotations
+            const speed = 12 + Math.random() * 5;
             const vx = Math.cos(angle) * speed;
             const vy = Math.sin(angle) * speed;
-            this.projectiles.push(new Projectile(this.player.x, this.player.y, {
+            this.projectiles.push(new Projectile(playerX, playerY, {
                 vx, vy,
                 size: 8,
-                damage: 50, // Massive damage
-                color: '#fff'
+                damage: 50,
+                color: '#ff00ff'
             }));
         }
-        // Also wipe small enemies
+
+        this.screenShakeDuration = 60;
+        this.screenShakeIntensity = 20;
+        this.createExplosion(playerX, playerY, '#ff00ff', 100);
+
+        // Wipe Screen (kill all except bosses)
         for (let i = this.asteroids.length - 1; i >= 0; i--) {
             const a = this.asteroids[i];
             if (!a.isBoss) {
-                 a.health -= 50;
-                 if (a.health <= 0) this.handleAsteroidDestruction(a, i);
+                 a.health = 0;
+                 this.handleAsteroidDestruction(a, i);
+            } else {
+                a.health -= 500; // Big damage to bosses
+                this.createExplosion(a.x, a.y, a.color, 50);
             }
         }
-        this.screenShakeDuration = 30;
     }
 
     get isNoHeatMode() {
