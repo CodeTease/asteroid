@@ -34,6 +34,37 @@
     </div>
 
     <div class="game-area" id="game-area">
+        <button id="hud-skill-button" style="display: none;">SKILL</button>
+        <div id="debug-panel" class="hidden">
+            <h3>Debug Panel</h3>
+            <button id="debug-time-plus">+60s Time</button>
+            <button id="debug-summon-boss">Summon Boss</button>
+            <div class="debug-row">
+                <select id="debug-enemy-select">
+                    <option value="standard">Standard</option>
+                    <option value="scout">Scout</option>
+                    <option value="brute">Brute</option>
+                    <option value="shard">Shard</option>
+                    <option value="shooter">Shooter</option>
+                    <option value="splitter">Splitter</option>
+                    <option value="seeker">Seeker</option>
+                    <option value="teleporter">Teleporter</option>
+                    <option value="orbiter">Orbiter</option>
+                    <option value="weaver">Weaver</option>
+                    <option value="bulwark">Bulwark</option>
+                    <option value="juggler">Juggler</option>
+                    <option value="sizzler">Sizzler</option>
+                    <option value="anchor">Anchor</option>
+                </select>
+                <button id="debug-spawn-enemy">Spawn</button>
+            </div>
+            <button id="debug-add-score">+1000 Pts</button>
+            <button id="debug-kill-all">Kill All</button>
+            <label><input type="checkbox" id="debug-god-mode"> God Mode</label>
+            <button id="debug-close">Close</button>
+        </div>
+        <button id="debug-toggle">🐛</button>
+
         <div id="final-boss-health-container">
             <div id="final-boss-health-bar"></div>
         </div>
@@ -59,7 +90,7 @@
                 <span class="hud-item" id="game-status">Ready</span>
             </div>
             <div class="hud-group">
-                <span class="hud-item">⏱️ <span id="timer">0s</span></span>
+                <span class="hud-item"><span id="timer-label">⏱️</span> <span id="timer">0s</span></span>
             </div>
         </div>
     </div>
@@ -94,6 +125,27 @@
             <label for="auto-upgrade-checkbox">Auto Upgrade</label>
         </div>
         <button id="continue-button">Continue</button>
+    </div>
+
+    <div id="void-skill-modal" class="message-box unselectable">
+        <h2 style="color: #a020f0; text-shadow: 0 0 10px #a020f0;">VOID MODE REACHED</h2>
+        <p>Choose a Special Skill to survive the Void.</p>
+        <div class="upgrade-options">
+             <div class="upgrade-category">
+                <button id="skill-no-heat" class="void-skill-btn">
+                    <strong>No Heat Mode</strong><br>
+                    <span style="font-size: 0.8em;">Disable Heat for 60s. (2m Cooldown)</span>
+                </button>
+                <button id="skill-permanent-echo" class="void-skill-btn">
+                    <strong>Permanent Echo</strong><br>
+                    <span style="font-size: 0.8em;">Spawn a second Echo Ally permanently.</span>
+                </button>
+                <button id="skill-ultimate-barrage" class="void-skill-btn">
+                    <strong>Ultimate Barrage</strong><br>
+                    <span style="font-size: 0.8em;">Clear the screen with massive fire. (2m Cooldown)</span>
+                </button>
+            </div>
+        </div>
     </div>
 
     <div id="how-to-play-modal" class="message-box unselectable">

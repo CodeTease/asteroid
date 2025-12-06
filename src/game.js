@@ -1,5 +1,5 @@
 import * as UI from './ui.js';
-import { Player, Projectile, AIAlly, LaserAlly, EchoAlly, Coolant, Asteroid, FinalBoss, Particle, StaticMine } from './classes.js';
+import { Player, Projectile, AIAlly, LaserAlly, EchoAlly, Coolant, Asteroid, FinalBoss, Particle, StaticMine, BehemothTurret, BehemothBomb } from './classes.js';
 import { audioManager } from './audio.js';
 
 export class Game {
@@ -16,6 +16,7 @@ export class Game {
         this.coolants = []; // New drop items
         this.score = 0;
         this.gameTime = 0;
+        this.voidStartTime = 0; // Initialize voidStartTime
         this.deltaTime = 0;
         this.lastTime = 0;
         this.nextBossTime = 0;
@@ -25,6 +26,7 @@ export class Game {
         this.allyUpgrades = {};
         this.laserAlly = null;
         this.echoAlly = null; // REPLACED PRISM WITH ECHO
+        this.echoAlly2 = null; // PERMANENT ECHO SKILL
         this.finalBoss = null;
         this.isBossActive = false;
         this.isFinalBossActive = false;
@@ -41,6 +43,16 @@ export class Game {
         // Aim Mode
         this.isAimUnlocked = false;
         this.mousePos = { x: 0, y: 0 };
+        this.godMode = false; // Debug
+
+        // VOID MODE SKILLS
+        this.voidSkills = {
+            noHeatMode: { active: false, timer: 0, cooldown: 120, lastUsed: -999, duration: 60 },
+            ultimateBarrage: { cooldown: 120, lastUsed: -999 },
+            permanentEcho: { acquired: false }
+        };
+        this.selectedSkill = null; // 'noHeatMode', 'permanentEcho', 'ultimateBarrage'
+        this.behemothSpawned = false;
     }
 
     start() {
@@ -71,6 +83,7 @@ export class Game {
         this.coolants = [];
         this.score = 0;
         this.gameTime = 0;
+        this.voidStartTime = 0; // Reset voidStartTime
         this.deltaTime = 0;
         this.lastTime = 0;
         this.lastSpawnTime = 0;
@@ -83,6 +96,7 @@ export class Game {
         this.finalBoss = null;
         this.laserAlly = null;
         this.echoAlly = null;
+        this.echoAlly2 = null;
         this.upgradePoints = 0;
         this.allyUpgrades = {
             fireRateLevel: 0,
@@ -98,10 +112,19 @@ export class Game {
         
         this.isAimUnlocked = false;
 
+        this.voidSkills = {
+            noHeatMode: { active: false, timer: 0, cooldown: 120, lastUsed: -999, duration: 60 },
+            ultimateBarrage: { cooldown: 120, lastUsed: -999 },
+            permanentEcho: { acquired: false }
+        };
+        this.selectedSkill = null;
+        this.behemothSpawned = false;
+
         this.updateHUD();
         this.updateGameStatus('Ready', false);
         UI.finalBossHealthContainer.style.display = 'none';
         UI.heatGroup.style.display = 'none'; // Hide heat bar initially
+        UI.timerLabel.innerText = "⏱️"; // Reset timer label
     }
 
     gameLoop(currentTime) {
@@ -132,11 +155,45 @@ export class Game {
         this.player.allies.forEach(p => p.update(this, dt));
         if (this.laserAlly) this.laserAlly.update(this, dt);
         if (this.echoAlly) this.echoAlly.update(this, dt);
+        if (this.echoAlly2) this.echoAlly2.update(this, dt);
 
         this.coolants.forEach((c, i) => {
              c.update(dt);
              if (c.y > UI.canvas.height) this.coolants.splice(i, 1);
         });
+
+        // VOID SKILL UPDATES & UI COOLDOWN
+        let skillText = null;
+        if (this.selectedSkill) {
+            const skill = this.voidSkills[this.selectedSkill];
+            if (this.selectedSkill === 'noHeatMode') {
+                if (skill.active) {
+                    skillText = `ACTIVE (${Math.ceil(skill.timer)}s)`;
+                } else {
+                    const cooldownLeft = Math.max(0, skill.cooldown - (this.gameTime - skill.lastUsed));
+                    if (cooldownLeft > 0) skillText = `Cooldown: ${Math.ceil(cooldownLeft)}s`;
+                    else skillText = "🔥 NO HEAT";
+                }
+            } else if (this.selectedSkill === 'ultimateBarrage') {
+                const cooldownLeft = Math.max(0, skill.cooldown - (this.gameTime - skill.lastUsed));
+                if (cooldownLeft > 0) skillText = `Cooldown: ${Math.ceil(cooldownLeft)}s`;
+                else skillText = "🚀 BARRAGE";
+            }
+            if (skillText) UI.updateSkillButton(skillText);
+        }
+
+        if (this.voidSkills.noHeatMode.active) {
+            this.voidSkills.noHeatMode.timer -= dt;
+            if (this.voidSkills.noHeatMode.timer <= 0) {
+                this.voidSkills.noHeatMode.active = false;
+                this.updateGameStatus("No Heat Mode Ended!");
+            }
+        }
+
+        // VOID MODE 100s TRIGGER
+        if (this.finalBossDefeated && this.getVoidTime() >= 100 && !this.selectedSkill && !this.isPaused) {
+             this.showVoidSkillSelection();
+        }
 
         for (let i = this.projectiles.length - 1; i >= 0; i--) {
             const p = this.projectiles[i];
@@ -149,7 +206,17 @@ export class Game {
         }
         for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
             const p = this.enemyProjectiles[i];
-            p.update(this, dt);
+
+            // Behemoth Bomb Special Logic (returns true if it exploded/expired)
+            if (p instanceof BehemothBomb) {
+                if (p.update(this, dt)) {
+                    this.enemyProjectiles.splice(i, 1);
+                    continue;
+                }
+            } else {
+                p.update(this, dt);
+            }
+
             if (p.y < 0 || p.y > UI.canvas.height || p.x < 0 || p.x > UI.canvas.width) {
                 this.enemyProjectiles.splice(i, 1);
             }
@@ -158,11 +225,16 @@ export class Game {
             const a = this.asteroids[i];
             a.update(this, dt);
             if (a.y > UI.canvas.height + a.size) {
-                if (a.isBoss && a !== this.finalBoss) {
+                // ORBITER FIX: Don't kill orbiter if it's orbiting (it might dip below screen)
+                if (a.type === 'orbiter' && a.isOrbiting) {
+                    continue;
+                }
+
+                if (a.isBoss && a !== this.finalBoss && a.type !== 'behemoth') {
                     this.isBossActive = false;
                     this.handleGameOver("Boss escaped!");
                     break;
-                } else {
+                } else if (a.type !== 'behemoth') {
                     this.asteroids.splice(i, 1);
                 }
             }
@@ -181,6 +253,10 @@ export class Game {
             this.checkUpgrades();
         }
     }
+
+    getVoidTime() {
+        return Math.max(0, this.gameTime - this.voidStartTime);
+    }
     
     draw() {
         UI.ctx.save();
@@ -197,6 +273,7 @@ export class Game {
         this.player.allies.forEach(p => p.draw());
         if (this.laserAlly) this.laserAlly.draw();
         if (this.echoAlly) this.echoAlly.draw(this);
+        if (this.echoAlly2) this.echoAlly2.draw(this);
         
         this.coolants.forEach(c => c.draw());
 
@@ -232,23 +309,9 @@ export class Game {
         const spawnInterval = Math.max(400, 1200 - Math.floor(this.gameTime) * 10);
         if (performance.now() - this.lastSpawnTime > spawnInterval && !this.isBossActive && !this.isFinalBossActive) {
             
-            // Post-Game Spawning Logic
-            if (this.isAimUnlocked && this.finalBossDefeated) {
-                const rand = Math.random();
-                // THE VOID SPAWNING
-                if (rand < 0.25) {
-                    this.asteroids.push(new Asteroid(this, { type: 'orbiter' }));
-                } else if (rand < 0.45) {
-                    this.asteroids.push(new Asteroid(this, { type: 'weaver' }));
-                } else if (rand < 0.55) {
-                    this.asteroids.push(new Asteroid(this, { type: 'bulwark' }));
-                } else if (rand < 0.65) {
-                     this.asteroids.push(new Asteroid(this, { type: 'teleporter' }));
-                } else {
-                    this.asteroids.push(new Asteroid(this));
-                }
-            } else {
-                this.asteroids.push(new Asteroid(this));
+            const enemyType = this.getSpawnType();
+            if (enemyType) {
+                 this.asteroids.push(new Asteroid(this, { type: enemyType }));
             }
             this.lastSpawnTime = performance.now();
         }
@@ -267,6 +330,127 @@ export class Game {
         if (this.gameTime >= 300 && !this.isFinalBossActive && !this.finalBoss && !this.finalBossDefeated) {
             this.spawnBoss(true);
         }
+
+        // VOID MODE BEHEMOTH SPAWN (at 150s Void Time)
+        if (this.finalBossDefeated && this.getVoidTime() >= 150 && !this.behemothSpawned) {
+             this.asteroids.push(new BehemothTurret(this));
+             this.behemothSpawned = true;
+             this.isBossActive = true;
+        }
+
+        // Override for Behemoth: Allow spawning even if isBossActive, but slower
+        if (this.finalBossDefeated && this.behemothSpawned && this.isBossActive) {
+             const voidSpawnInterval = 2000; // Slower spawn rate
+             if (performance.now() - this.lastSpawnTime > voidSpawnInterval) {
+                 const enemyType = this.getSpawnType();
+                 if (enemyType) {
+                      this.asteroids.push(new Asteroid(this, { type: enemyType }));
+                 }
+                 this.lastSpawnTime = performance.now();
+             }
+        }
+    }
+
+    getSpawnType() {
+        const isVoid = this.finalBossDefeated;
+        const t = isVoid ? this.getVoidTime() : this.gameTime;
+        const weights = [];
+
+        if (!isVoid) {
+            // NORMAL MODE
+            if (t < 60) {
+                // 0-60s: Intro. Phase-in Seeker.
+                weights.push({ type: 'standard', w: 25 });
+                weights.push({ type: 'shard', w: 20 });
+                weights.push({ type: 'splitter', w: 15 });
+                weights.push({ type: 'scout', w: 15 });
+                weights.push({ type: 'brute', w: 15 });
+                weights.push({ type: 'seeker', w: 10 });
+            } else if (t < 120) {
+                // 60-120s: Projectile Pressure. Phase-in Shooter, Decrease Scout.
+                weights.push({ type: 'standard', w: 20 });
+                weights.push({ type: 'shard', w: 15 });
+                weights.push({ type: 'splitter', w: 15 });
+                weights.push({ type: 'scout', w: 5 });
+                weights.push({ type: 'brute', w: 15 });
+                weights.push({ type: 'seeker', w: 10 });
+                weights.push({ type: 'shooter', w: 20 });
+            } else if (t < 180) {
+                // 120-180s: Complexity. Phase-in Teleporter. Decrease Standard/Shard.
+                weights.push({ type: 'standard', w: 10 });
+                weights.push({ type: 'shard', w: 10 });
+                weights.push({ type: 'splitter', w: 15 });
+                weights.push({ type: 'scout', w: 5 });
+                weights.push({ type: 'brute', w: 15 });
+                weights.push({ type: 'seeker', w: 15 });
+                weights.push({ type: 'shooter', w: 20 });
+                weights.push({ type: 'teleporter', w: 10 });
+            } else {
+                // 180-300s: Pre-Boss. High Seeker/Shooter/Teleporter. Low Brute/Splitter.
+                weights.push({ type: 'standard', w: 5 });
+                weights.push({ type: 'shard', w: 5 });
+                weights.push({ type: 'splitter', w: 5 });
+                weights.push({ type: 'scout', w: 5 });
+                weights.push({ type: 'brute', w: 5 });
+                weights.push({ type: 'seeker', w: 25 });
+                weights.push({ type: 'shooter', w: 25 });
+                weights.push({ type: 'teleporter', w: 25 });
+            }
+        } else {
+            // VOID MODE
+            // Base: Orbiter, Weaver, Bulwark, Teleporter.
+            // Phase-in: Juggler, Sizzler, Anchor.
+            // Phase-out: Teleporter, Orbiter, Weaver, Bulwark.
+
+            if (t < 60) {
+                 // 0-60s V-Time: Base Void Legion.
+                 weights.push({ type: 'orbiter', w: 30 });
+                 weights.push({ type: 'weaver', w: 30 });
+                 weights.push({ type: 'bulwark', w: 30 });
+                 weights.push({ type: 'teleporter', w: 10 });
+            } else if (t < 120) {
+                 // 60-120s V-Time: Phase-in Juggler. Decrease Orbiter.
+                 weights.push({ type: 'orbiter', w: 15 });
+                 weights.push({ type: 'weaver', w: 30 });
+                 weights.push({ type: 'bulwark', w: 30 });
+                 weights.push({ type: 'teleporter', w: 10 });
+                 weights.push({ type: 'juggler', w: 15 });
+            } else if (t < 180) {
+                 // 120-180s V-Time: Phase-in Sizzler. Decrease Weaver.
+                 weights.push({ type: 'orbiter', w: 15 });
+                 weights.push({ type: 'weaver', w: 15 });
+                 weights.push({ type: 'bulwark', w: 30 });
+                 weights.push({ type: 'teleporter', w: 10 });
+                 weights.push({ type: 'juggler', w: 15 });
+                 weights.push({ type: 'sizzler', w: 15 }); // Low chance
+                 if (t >= 100) weights.push({ type: 'tanker', w: 10 }); // New Enemy (100s+)
+            } else {
+                 // 180s+ V-Time: Phase-in Anchor. Decrease Bulwark.
+                 weights.push({ type: 'orbiter', w: 15 });
+                 weights.push({ type: 'weaver', w: 15 });
+                 weights.push({ type: 'bulwark', w: 15 });
+                 weights.push({ type: 'teleporter', w: 10 });
+                 weights.push({ type: 'juggler', w: 15 });
+                 weights.push({ type: 'sizzler', w: 15 });
+                 weights.push({ type: 'anchor', w: 15 });
+                 if (t >= 100) {
+                    weights.push({ type: 'tanker', w: 15 });
+                    weights.push({ type: 'stunner', w: 15 }); // New Enemy (100s+)
+                 }
+            }
+        }
+
+        // Weighted Random Selection
+        const totalWeight = weights.reduce((sum, item) => sum + item.w, 0);
+        let random = Math.random() * totalWeight;
+
+        for (const item of weights) {
+            random -= item.w;
+            if (random <= 0) {
+                return item.type;
+            }
+        }
+        return weights.length > 0 ? weights[0].type : 'standard';
     }
 
     spawnBoss(isFinal) {
@@ -296,6 +480,8 @@ export class Game {
             if (this.isGameOver) break;
             const asteroid = this.asteroids[j];
             if (this.checkCollision(this.player, asteroid)) {
+                if (this.godMode) return; // God Mode Check
+
                 if (this.player.shieldCharges > 0) {
                     if (asteroid.isBoss) {
                         this.player.shieldCharges = 0;
@@ -314,7 +500,11 @@ export class Game {
         // Player vs Enemy Projectiles
         for (let j = this.enemyProjectiles.length - 1; j >= 0; j--) {
             const p = this.enemyProjectiles[j];
+            if (p instanceof BehemothBomb) continue; // Bomb handles its own collision in update
+
             if (this.checkCollision(this.player, p)) {
+                if (this.godMode) return; // God Mode Check
+
                 if (this.player.shieldCharges > 0) {
                     this.player.shieldCharges--;
                     this.createExplosion(p.x, p.y, '#00e5ff', 20);
@@ -348,6 +538,22 @@ export class Game {
                 if (this.checkCollision(this.projectiles[i], this.asteroids[j])) {
                     const asteroid = this.asteroids[j];
                     
+                    // BEHEMOTH LOGIC (AI Ally Immunity)
+                    if (asteroid.type === 'behemoth' && this.projectiles[i].source === 'ai_ally') {
+                        this.createExplosion(this.projectiles[i].x, this.projectiles[i].y, '#888', 5);
+                        this.projectiles.splice(i, 1);
+                        hitSomething = true;
+                        break;
+                    }
+
+                    // TANKER PARRY LOGIC (Small AI Ally projectiles)
+                    if (asteroid.type === 'tanker' && this.projectiles[i].source === 'ai_ally') {
+                         this.createExplosion(this.projectiles[i].x, this.projectiles[i].y, '#888', 5); // Grey spark
+                         this.projectiles.splice(i, 1);
+                         hitSomething = true;
+                         break;
+                    }
+
                     // BULWARK SHIELD LOGIC
                     if (asteroid.type === 'bulwark') {
                         // Better: If player is below bulwark (y > asteroid.y), shield blocks.
@@ -362,7 +568,20 @@ export class Game {
 
 
                     this.createExplosion(asteroid.x, asteroid.y, asteroid.color, 5);
-                    asteroid.health -= this.projectiles[i].damage;
+
+                    let damage = this.projectiles[i].damage;
+
+                    // VOID MODE GLOBAL DAMAGE BUFF (x2) - STARTS AT 100s+
+                    if (this.finalBossDefeated && this.getVoidTime() >= 100) damage *= 2;
+
+                    asteroid.health -= damage;
+
+                    // ANCHOR PROTECTION LOGIC
+                    if (asteroid.protectedBy && asteroid.health <= 1) {
+                         asteroid.health = 1;
+                         this.createExplosion(asteroid.x, asteroid.y, '#ffffff', 2); // White shield sparks
+                    }
+
                     this.projectiles.splice(i, 1);
                     hitSomething = true;
                     break;
@@ -387,6 +606,10 @@ export class Game {
                 this.updateGameStatus('FINAL BOSS DEFEATED! VOID MODE UNLOCKED!');
                 UI.heatGroup.style.display = 'flex'; // Show Heat Bar
                 
+                // VOID TIME RESET
+                this.voidStartTime = this.gameTime;
+                UI.timerLabel.innerText = "Void Time";
+
                 this.upgradePoints += 10;
                 this.player.shieldCharges += 5;
                 this.screenShakeDuration = 60;
@@ -399,14 +622,30 @@ export class Game {
                 this.echoAlly = new EchoAlly();
                 this.updateGameStatus("Echo Ally Acquired!");
 
+                // Upgrade modal if needed, but Skill Selection comes later at 100s
                 if (!this.areAllUpgradesMaxed()) {
                     this.isAutoUpgradeEnabled ? this.autoUpgradeAllies() : this.showUpgradeModal();
                 }
+
             }
         } else {
             this.createExplosion(asteroid.x, asteroid.y, asteroid.color, asteroid.size);
             this.asteroids.splice(index, 1);
             
+            // ANCHOR DEATH LOGIC
+            if (asteroid.type === 'anchor' && asteroid.anchorTarget) {
+                 const target = asteroid.anchorTarget;
+                 if (target && this.asteroids.includes(target)) {
+                     target.protectedBy = null;
+                     // Request: "lose 50% max HP immediately"
+                     const damage = target.maxHealth * 0.5;
+                     target.health -= damage;
+
+                     this.createExplosion(target.x, target.y, '#ff0000', 20); // Big red hit
+                     this.updateGameStatus("Anchor Destroyed! Shield Down!");
+                 }
+            }
+
             // Drop Coolant (10% chance from Void Enemies)
             if (['orbiter', 'weaver', 'bulwark'].includes(asteroid.type) && Math.random() < 0.1) {
                 this.coolants.push(new Coolant(asteroid.x, asteroid.y));
@@ -504,7 +743,8 @@ export class Game {
     updateHUD() {
         UI.scoreDisplay.innerText = `${this.score}`;
         UI.shieldDisplay.innerText = `${this.player.shieldCharges}`;
-        UI.timerDisplay.innerText = `${Math.floor(this.gameTime)}s`;
+        const displayTime = this.finalBossDefeated ? this.getVoidTime() : this.gameTime;
+        UI.timerDisplay.innerText = `${Math.floor(displayTime)}s`;
         UI.updateUpgradePoints(this.upgradePoints);
         
         // Update Heat Bar
@@ -535,6 +775,102 @@ export class Game {
                 UI.gameStatus.style.opacity = '0';
             }, 2500);
         }
+    }
+
+    // VOID SKILL METHODS
+    showVoidSkillSelection() {
+        this.isPaused = true;
+        UI.showVoidSkillModal((skill) => {
+            this.selectVoidSkill(skill);
+            UI.hideVoidSkillModal();
+            this.isPaused = false;
+            this.lastTime = performance.now();
+        });
+    }
+
+    selectVoidSkill(skill) {
+        this.selectedSkill = skill;
+        this.updateGameStatus(`Skill Selected: ${skill}`);
+
+        if (skill === 'permanentEcho') {
+             this.voidSkills.permanentEcho.acquired = true;
+             this.echoAlly2 = new EchoAlly();
+             this.updateGameStatus("Second Echo Ally Acquired!");
+        }
+
+        // Add skill button to HUD or Key listener
+        UI.addSkillButton(skill, () => this.activateSkill());
+    }
+
+    activateSkill() {
+        const now = this.gameTime;
+        const skill = this.selectedSkill;
+
+        if (!skill) return;
+
+        if (skill === 'noHeatMode') {
+             if (now - this.voidSkills.noHeatMode.lastUsed >= this.voidSkills.noHeatMode.cooldown) {
+                 this.voidSkills.noHeatMode.active = true;
+                 this.voidSkills.noHeatMode.timer = this.voidSkills.noHeatMode.duration;
+                 this.voidSkills.noHeatMode.lastUsed = now;
+                 this.player.heat = 0;
+                 this.player.isOverheated = false;
+                 this.updateGameStatus("NO HEAT MODE ACTIVATED!");
+                 audioManager.playSound('Playerupgraded');
+             } else {
+                 this.updateGameStatus("Skill on Cooldown!");
+             }
+        } else if (skill === 'ultimateBarrage') {
+             if (now - this.voidSkills.ultimateBarrage.lastUsed >= this.voidSkills.ultimateBarrage.cooldown) {
+                 this.voidSkills.ultimateBarrage.lastUsed = now;
+                 this.fireUltimateBarrage();
+                 this.updateGameStatus("ULTIMATE BARRAGE!");
+                 audioManager.playSound('finalbossExplosion');
+             } else {
+                  this.updateGameStatus("Skill on Cooldown!");
+             }
+        }
+    }
+
+    fireUltimateBarrage() {
+        // Ultimate Barrage Buff: Massive Spiral + Random Spread
+        const count = 100;
+        const playerX = this.player.x;
+        const playerY = this.player.y;
+
+        for (let i = 0; i < count; i++) {
+            // Spiral Pattern
+            const angle = (i / count) * Math.PI * 4; // 2 rotations
+            const speed = 12 + Math.random() * 5;
+            const vx = Math.cos(angle) * speed;
+            const vy = Math.sin(angle) * speed;
+            this.projectiles.push(new Projectile(playerX, playerY, {
+                vx, vy,
+                size: 8,
+                damage: 50,
+                color: '#ff00ff'
+            }));
+        }
+
+        this.screenShakeDuration = 60;
+        this.screenShakeIntensity = 20;
+        this.createExplosion(playerX, playerY, '#ff00ff', 100);
+
+        // Wipe Screen (kill all except bosses)
+        for (let i = this.asteroids.length - 1; i >= 0; i--) {
+            const a = this.asteroids[i];
+            if (!a.isBoss) {
+                 a.health = 0;
+                 this.handleAsteroidDestruction(a, i);
+            } else {
+                a.health -= 500; // Big damage to bosses
+                this.createExplosion(a.x, a.y, a.color, 50);
+            }
+        }
+    }
+
+    get isNoHeatMode() {
+        return this.voidSkills.noHeatMode.active;
     }
 
     resizeCanvas() {

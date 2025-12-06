@@ -3,11 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import { Game } from './src/game.js';
+import { Asteroid } from './src/classes.js';
 import * as UI from './src/ui.js';
 import { audioManager } from './src/audio.js';
 
 window.addEventListener('DOMContentLoaded', () => {
     const game = new Game();
+    window.game = game; // Expose for console debugging if needed
 
     // Play menu music on first user interaction
     const playMenuMusicOnFirstInteraction = async () => {
@@ -165,4 +167,80 @@ window.addEventListener('DOMContentLoaded', () => {
         game.isAutoUpgradeEnabled = UI.autoUpgradeCheckbox.checked;
     });
 
+    // --- DEBUG PANEL LISTENERS ---
+    const debugPanel = document.getElementById('debug-panel');
+    const debugToggle = document.getElementById('debug-toggle');
+    const debugClose = document.getElementById('debug-close');
+    const debugTimePlus = document.getElementById('debug-time-plus');
+    const debugSummonBoss = document.getElementById('debug-summon-boss');
+    const debugSpawnEnemy = document.getElementById('debug-spawn-enemy');
+    const debugEnemySelect = document.getElementById('debug-enemy-select');
+    const debugAddScore = document.getElementById('debug-add-score');
+    const debugKillAll = document.getElementById('debug-kill-all');
+    const debugGodMode = document.getElementById('debug-god-mode');
+
+    // Make Void Enemies Selectable in Debug
+    const voidEnemies = ['tanker', 'stunner', 'behemoth'];
+    voidEnemies.forEach(type => {
+        if (!debugEnemySelect.querySelector(`option[value="${type}"]`)) {
+            const opt = document.createElement('option');
+            opt.value = type;
+            opt.innerText = type.charAt(0).toUpperCase() + type.slice(1);
+            debugEnemySelect.appendChild(opt);
+        }
+    });
+
+    debugToggle.addEventListener('click', () => {
+        debugPanel.classList.toggle('hidden');
+    });
+
+    debugClose.addEventListener('click', () => {
+        debugPanel.classList.add('hidden');
+    });
+
+    debugTimePlus.addEventListener('click', () => {
+        game.gameTime += 60;
+        game.updateHUD();
+    });
+
+    debugSummonBoss.addEventListener('click', () => {
+        if (!game.isFinalBossActive) {
+            game.spawnBoss(true);
+        }
+    });
+
+    debugSpawnEnemy.addEventListener('click', () => {
+        const type = debugEnemySelect.value;
+        game.asteroids.push(new Asteroid(game, { type: type, y: -50 }));
+    });
+
+    debugAddScore.addEventListener('click', () => {
+        game.score += 1000;
+        game.upgradePoints += 10;
+        game.updateHUD();
+    });
+
+    debugKillAll.addEventListener('click', () => {
+        // Iterate backwards to safely remove
+        for (let i = game.asteroids.length - 1; i >= 0; i--) {
+            const asteroid = game.asteroids[i];
+            if (!asteroid.isBoss) { // Don't kill Boss/Mini-boss usually, but request said "all enemies"
+                 // Setting health to 0 triggers explosion and drops in game loop
+                 asteroid.health = 0;
+                 // Force immediate handle if we want instant clear, but letting game loop handle it
+                 // creates a nice chain reaction of explosions.
+                 // However, let's call handleAsteroidDestruction directly to ensure they are gone now
+                 game.handleAsteroidDestruction(asteroid, i);
+            } else {
+                 // For bosses, maybe just deal massive damage?
+                 // Request said "Kill all". Let's kill bosses too.
+                 asteroid.health = 0;
+                 game.handleAsteroidDestruction(asteroid, i);
+            }
+        }
+    });
+
+    debugGodMode.addEventListener('change', () => {
+        game.godMode = debugGodMode.checked;
+    });
 });

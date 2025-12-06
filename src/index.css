@@ -534,3 +534,134 @@ canvas {
     border-radius: 8px;
     transition: width 0.2s ease-in-out;
 }
+
+/* Debug Panel */
+#debug-panel {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    width: 250px;
+    background: rgba(10, 10, 30, 0.95);
+    border: 1px solid var(--primary-color);
+    color: white;
+    padding: 15px;
+    border-radius: 5px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(5px);
+}
+
+#debug-panel.hidden {
+    display: none;
+}
+
+#debug-panel h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: var(--primary-color);
+    border-bottom: 1px solid #555;
+    padding-bottom: 5px;
+}
+
+#debug-panel button {
+    margin-top: 5px;
+    padding: 5px 10px;
+    font-size: 0.9rem;
+}
+
+.debug-row {
+    display: flex;
+    gap: 5px;
+}
+
+.debug-row select {
+    flex: 1;
+    background: #222;
+    color: white;
+    border: 1px solid #555;
+    border-radius: 3px;
+    padding: 5px;
+}
+
+#debug-toggle {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 9998;
+    background: transparent;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    opacity: 0.3;
+    padding: 0;
+    margin: 0;
+    width: 30px;
+    height: 30px;
+    box-shadow: none;
+}
+
+#debug-toggle:hover {
+    opacity: 1;
+    background: transparent;
+    box-shadow: none;
+    transform: scale(1.1);
+}
+
+/* Void Skill Button (HUD) */
+#hud-skill-button {
+    position: absolute;
+    bottom: 80px;
+    right: 20px;
+    z-index: 8;
+    background-color: rgba(160, 32, 240, 0.7); /* Purple */
+    border: 2px solid #fff;
+    color: #fff;
+    padding: 15px 20px;
+    border-radius: 50%;
+    width: 80px;
+    height: 80px;
+    font-size: 0.9rem;
+    font-weight: bold;
+    box-shadow: 0 0 15px #a020f0;
+    cursor: pointer;
+    animation: pulse-skill 2s infinite;
+    display: none; /* Hidden by default */
+    text-align: center;
+    line-height: 1.2;
+}
+
+#hud-skill-button:hover {
+    transform: scale(1.1);
+    background-color: rgba(160, 32, 240, 1);
+}
+
+@keyframes pulse-skill {
+    0% { box-shadow: 0 0 15px #a020f0; }
+    50% { box-shadow: 0 0 25px #ff00ff; }
+    100% { box-shadow: 0 0 15px #a020f0; }
+}
+
+/* Void Skill Modal Buttons */
+.void-skill-btn {
+    border-color: #a020f0 !important; /* Override default */
+    background: linear-gradient(45deg, #300050, #100020);
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 1rem;
+}
+
+.void-skill-btn:hover {
+    background: linear-gradient(45deg, #500080, #300050) !important;
+    box-shadow: 0 0 15px #a020f0 !important;
+}
+
+.void-skill-btn strong {
+    font-size: 1.1rem;
+    color: #e080ff;
+    margin-bottom: 5px;
+}

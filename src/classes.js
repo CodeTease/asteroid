@@ -16,9 +16,13 @@ export class Player {
         this.alpha = 1;
         this.allies = [];
         this.lastX = this.x;
+        this.vx = 0; // Added for Juggler push effect
         this.isDestroyed = false;
         this.shieldCharges = 0;
         
+        this.isStunned = false;
+        this.stunTimer = 0;
+
         // Heat System
         this.heat = 0;
         this.maxHeat = 100;
@@ -88,9 +92,29 @@ export class Player {
         if ((game.keys['ArrowLeft'] || game.keys['a']) && this.x > this.size) this.x -= moveSpeed;
         if ((game.keys['ArrowRight'] || game.keys['d']) && this.x < canvas.width - this.size) this.x += moveSpeed;
 
+        // Apply Velocity (Juggler Push)
+        if (this.vx !== 0) {
+            this.x += this.vx * 60 * dt;
+            this.vx *= 0.9; // Friction to slow down push
+            if (Math.abs(this.vx) < 0.1) this.vx = 0;
+
+            // Boundary checks for push
+            if (this.x < this.size) this.x = this.size;
+            if (this.x > canvas.width - this.size) this.x = canvas.width - this.size;
+        }
+
         // Heat Decay
         if (!this.isOverheated && this.heat > 0) {
-            this.heat -= 40 * dt; // Decay speed
+            // Check for Sizzler
+            const hasSizzler = game.asteroids.some(a => a.type === 'sizzler');
+            // Check for BehemothTurret
+            const hasBehemoth = game.asteroids.some(a => a instanceof BehemothTurret);
+
+            let decayRate = 40;
+            if (hasSizzler) decayRate = 20;
+            if (hasBehemoth) decayRate = 10; // Behemoth significantly reduces cooling
+
+            this.heat -= decayRate * dt; // Decay speed
             if (this.heat < 0) this.heat = 0;
         }
     }
@@ -99,8 +123,17 @@ export class Player {
         if (game.isGameOver || game.isPaused || this.isOverheated) return;
 
         // Heat Build-up
-        if (game.isAimUnlocked) {
-            this.heat += 10;
+        if (game.isAimUnlocked && !game.isNoHeatMode) {
+            // Check for Sizzler
+            const hasSizzler = game.asteroids.some(a => a.type === 'sizzler');
+             // Check for BehemothTurret
+            const hasBehemoth = game.asteroids.some(a => a instanceof BehemothTurret);
+
+            let heatGen = 10;
+            if (hasSizzler) heatGen = 12;
+            if (hasBehemoth) heatGen = 15; // Behemoth increases heat generation
+
+            this.heat += heatGen;
             if (this.heat >= this.maxHeat) {
                 this.heat = this.maxHeat;
                 this.isOverheated = true;
@@ -116,7 +149,7 @@ export class Player {
         audioManager.playSound('shoot', 0.5);
 
         // Helper to create bullets
-        const createBullet = (originX, originY) => {
+        const createBullet = (originX, originY, source = 'player') => {
             let vx = 0;
             let vy = -8;
 
@@ -131,23 +164,27 @@ export class Player {
 
             if (this.fireRate === 2) {
                 if (game.isAimUnlocked) {
-                    game.projectiles.push(new Projectile(originX, originY, { size: this.projectileSize, damage: this.projectileDamage, vx: vx + 1, vy: vy }));
-                    game.projectiles.push(new Projectile(originX, originY, { size: this.projectileSize, damage: this.projectileDamage, vx: vx - 1, vy: vy }));
+                    game.projectiles.push(new Projectile(originX, originY, { size: this.projectileSize, damage: this.projectileDamage, vx: vx + 1, vy: vy, source: source }));
+                    game.projectiles.push(new Projectile(originX, originY, { size: this.projectileSize, damage: this.projectileDamage, vx: vx - 1, vy: vy, source: source }));
                 } else {
-                    game.projectiles.push(new Projectile(originX - 7, originY, { size: this.projectileSize, damage: this.projectileDamage }));
-                    game.projectiles.push(new Projectile(originX + 7, originY, { size: this.projectileSize, damage: this.projectileDamage }));
+                    game.projectiles.push(new Projectile(originX - 7, originY, { size: this.projectileSize, damage: this.projectileDamage, source: source }));
+                    game.projectiles.push(new Projectile(originX + 7, originY, { size: this.projectileSize, damage: this.projectileDamage, source: source }));
                 }
             } else {
-                game.projectiles.push(new Projectile(originX, originY, { size: this.projectileSize, damage: this.projectileDamage, vx, vy }));
+                game.projectiles.push(new Projectile(originX, originY, { size: this.projectileSize, damage: this.projectileDamage, vx, vy, source: source }));
             }
         };
 
         // Player shoots
-        createBullet(this.x, this.y);
+        createBullet(this.x, this.y, 'player');
 
         // Echo shoots (if exists)
-        if (game.echoAlly) {
-            createBullet(game.echoAlly.x, game.echoAlly.y);
+        if (game.echoAlly && !game.echoAlly.isStunned) {
+            createBullet(game.echoAlly.x, game.echoAlly.y, 'echo');
+        }
+        // Second Echo (Permanent Echo Skill)
+        if (game.echoAlly2 && !game.echoAlly2.isStunned) {
+            createBullet(game.echoAlly2.x, game.echoAlly2.y, 'echo');
         }
     }
 }
@@ -161,6 +198,7 @@ export class Projectile {
         this.vx = options.vx ?? 0;
         this.vy = options.vy ?? -8;
         this.color = options.color ?? '#00ffff';
+        this.source = options.source ?? 'player'; // 'player', 'echo', 'ai_ally'
     }
 
     draw() {
@@ -196,13 +234,19 @@ export class AIAlly extends Player {
         if (this.y < -this.size * 2) return;
         ctx.save();
         ctx.globalAlpha = this.alpha;
-        ctx.fillStyle = '#007bff';
+        ctx.fillStyle = this.isStunned ? '#555' : '#007bff'; // Grey when stunned
         ctx.beginPath();
         ctx.moveTo(this.x, this.y);
         ctx.lineTo(this.x - this.size, this.y + this.size * 2);
         ctx.lineTo(this.x + this.size, this.y + this.size * 2);
         ctx.closePath();
         ctx.fill();
+
+        if (this.isStunned) {
+             ctx.fillStyle = 'yellow';
+             ctx.font = '12px Arial';
+             ctx.fillText("⚡", this.x - 4, this.y - 10);
+        }
         ctx.restore();
     }
     update(game, dt) {
@@ -210,6 +254,13 @@ export class AIAlly extends Player {
             this.y -= this.speed * 60 * dt;
             return;
         }
+
+        if (this.isStunned) {
+            this.stunTimer -= dt;
+            if (this.stunTimer <= 0) this.isStunned = false;
+            return;
+        }
+
         const patrolCenterX = this.side === 'left' ? canvas.width / 4 : canvas.width * 3 / 4;
         const patrolRange = canvas.width / 5;
         this.x = patrolCenterX + Math.sin(Date.now() / 800) * (patrolRange / 2);
@@ -249,7 +300,7 @@ export class AIAlly extends Player {
         const dist = Math.hypot(dx, dy);
         const baseSpeed = 8;
         const speed = game.allyUpgrades.hasFasterProjectiles ? baseSpeed * 1.5 : baseSpeed;
-        const projectileOptions = { size: this.projectileSize, damage: this.projectileDamage };
+        const projectileOptions = { size: this.projectileSize, damage: this.projectileDamage, source: 'ai_ally' };
         if (game.allyUpgrades.hasDoubleShot) {
             const angle = Math.atan2(dy, dx);
             const spread = Math.PI / 18;
@@ -285,6 +336,23 @@ export class LaserAlly extends Player {
         if (this.y < -this.size * 2) return;
         const now = Date.now();
         const isOnCooldown = now - this.lastFireStopTime < this.cooldownDuration;
+
+        if (this.isStunned) {
+             ctx.save();
+             ctx.fillStyle = '#555';
+             ctx.beginPath();
+             ctx.moveTo(this.x, this.y);
+             ctx.lineTo(this.x - this.size, this.y + this.size * 2);
+             ctx.lineTo(this.x + this.size, this.y + this.size * 2);
+             ctx.closePath();
+             ctx.fill();
+             ctx.fillStyle = 'yellow';
+             ctx.font = '20px Arial';
+             ctx.fillText("⚡", this.x - 7, this.y + 20);
+             ctx.restore();
+             return;
+        }
+
         if (isOnCooldown && !this.isFiring) {
             ctx.save();
             const cooldownProgress = (now - this.lastFireStopTime) / this.cooldownDuration;
@@ -336,6 +404,17 @@ export class LaserAlly extends Player {
             }
             return;
         }
+
+        if (this.isStunned) {
+            this.stunTimer -= dt;
+            if (this.isFiring) {
+                audioManager.stopLoopingSound('laseringSound');
+                this.isFiring = false;
+            }
+            if (this.stunTimer <= 0) this.isStunned = false;
+            return;
+        }
+
         this.x = canvas.width / 2;
         const now = Date.now();
         const isOnCooldown = now - this.lastFireStopTime < this.cooldownDuration;
@@ -357,21 +436,53 @@ export class LaserAlly extends Player {
         }
         if (this.isFiring) {
             let bestTarget = null;
-            if (game.isFinalBossActive && game.finalBoss) {
-                bestTarget = game.finalBoss;
-            } else {
+
+            // PRIORITY TARGETING FOR LASER ALLY (Stunner first)
+            const stunners = game.asteroids.filter(a => a.type === 'stunner');
+            if (stunners.length > 0) {
+                 // Pick closest stunner
                 let minDistance = Infinity;
-                for (const asteroid of game.asteroids) {
-                    const distance = Math.hypot(this.x - asteroid.x, this.y - asteroid.y);
+                for (const stunner of stunners) {
+                    const distance = Math.hypot(this.x - stunner.x, this.y - stunner.y);
                     if (distance < minDistance) {
                         minDistance = distance;
-                        bestTarget = asteroid;
+                        bestTarget = stunner;
                     }
                 }
             }
+
+            if (!bestTarget) {
+                if (game.isFinalBossActive && game.finalBoss) {
+                    bestTarget = game.finalBoss;
+                } else if (game.isBossActive) {
+                    // Target mini-bosses (like BehemothTurret)
+                    bestTarget = game.asteroids.find(a => a.isBoss);
+                }
+
+                if (!bestTarget) {
+                    let minDistance = Infinity;
+                    for (const asteroid of game.asteroids) {
+                        const distance = Math.hypot(this.x - asteroid.x, this.y - asteroid.y);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            bestTarget = asteroid;
+                        }
+                    }
+                }
+            }
+
             if (bestTarget) {
                 this.laserTarget = { x: bestTarget.x, y: bestTarget.y };
-                bestTarget.health -= this.laserDamage * dt;
+
+                // Damage Logic
+                // Tanker takes 50% damage from Laser Ally
+                let damageMultiplier = 1;
+                if (bestTarget.type === 'tanker') damageMultiplier = 0.5;
+
+                // Void Mode Global Buff: x2 Damage (Starts at 100s+)
+                if (game.finalBossDefeated && game.gameTime >= 100) damageMultiplier *= 2;
+
+                bestTarget.health -= this.laserDamage * dt * damageMultiplier;
             } else {
                 this.laserTarget = null;
             }
@@ -393,6 +504,8 @@ export class EchoAlly {
         this.y = canvas.height - 100; // Start higher
         this.size = 15;
         this.floatTimer = 0; // For sine wave animation
+        this.isStunned = false;
+        this.stunTimer = 0;
     }
 
     draw(game) {
@@ -400,16 +513,20 @@ export class EchoAlly {
 
         ctx.save();
         ctx.globalAlpha = 0.4; // Ghostly transparent
-        
-        // Use player's rotation logic for the ghost
-        if (game && game.isAimUnlocked && game.mousePos) {
-             const angle = Math.atan2(game.mousePos.y - this.y, game.mousePos.x - this.x);
-             ctx.translate(this.x, this.y);
-             ctx.rotate(angle + Math.PI / 2); 
-             ctx.translate(-this.x, -this.y);
+        if (this.isStunned) {
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = '#555'; // Grey when stunned
+        } else {
+            // Use player's rotation logic for the ghost
+            if (game && game.isAimUnlocked && game.mousePos) {
+                 const angle = Math.atan2(game.mousePos.y - this.y, game.mousePos.x - this.x);
+                 ctx.translate(this.x, this.y);
+                 ctx.rotate(angle + Math.PI / 2);
+                 ctx.translate(-this.x, -this.y);
+            }
+            ctx.fillStyle = '#00ffff'; // Cyan Ghost
         }
 
-        ctx.fillStyle = '#00ffff'; // Cyan Ghost
         ctx.beginPath();
         ctx.moveTo(this.x, this.y + this.size * 2.2);
         ctx.lineTo(this.x - this.size * 0.6, this.y + this.size * 1.8);
@@ -417,7 +534,7 @@ export class EchoAlly {
         ctx.closePath();
         ctx.fill();
 
-        ctx.fillStyle = '#aaddff';
+        if (!this.isStunned) ctx.fillStyle = '#aaddff';
         ctx.beginPath();
         ctx.moveTo(this.x, this.y);
         ctx.lineTo(this.x - this.size, this.y + this.size * 2);
@@ -430,6 +547,11 @@ export class EchoAlly {
     }
 
     update(game, dt) {
+        if (this.isStunned) {
+             this.stunTimer -= dt;
+             if (this.stunTimer <= 0) this.isStunned = false;
+        }
+
         if (game.player && !game.player.isDestroyed) {
             this.floatTimer += dt;
             
@@ -507,6 +629,82 @@ export class StaticMine {
     }
 }
 
+export class BehemothBomb {
+    constructor(x, y, targetX, targetY) {
+        this.x = x;
+        this.y = y;
+        this.targetX = targetX;
+        this.targetY = targetY;
+        this.size = 20;
+        this.speed = 1.5;
+        this.color = '#ff4500';
+        this.isExploding = false;
+        this.explosionRadius = 150;
+        this.explodeTimer = 0;
+    }
+
+    draw() {
+        if (this.isExploding) {
+            ctx.save();
+            ctx.fillStyle = `rgba(255, 69, 0, ${0.5 + Math.sin(Date.now() / 50) * 0.5})`;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.explosionRadius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        } else {
+            ctx.save();
+            ctx.fillStyle = this.color;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = 'red';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fill();
+            // Pulse center
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size * 0.5 * (1 + Math.sin(Date.now() / 100) * 0.3), 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+
+    update(game, dt) {
+        if (this.isExploding) {
+            this.explodeTimer -= dt;
+            if (this.explodeTimer <= 0) return true; // Signal to remove
+
+            // Damage check (simple: if player in radius)
+            const dist = Math.hypot(game.player.x - this.x, game.player.y - this.y);
+            if (dist < this.explosionRadius && !game.player.isDestroyed) {
+                // Break shields instantly or kill
+                if (game.player.shieldCharges > 0) {
+                    game.player.shieldCharges = 0;
+                    game.updateGameStatus("SHIELD BROKEN BY BOMB!");
+                    game.screenShakeDuration = 20;
+                } else {
+                    game.handleGameOver("Obliterated by Behemoth Bomb!");
+                }
+            }
+            return false;
+        }
+
+        const dx = this.targetX - this.x;
+        const dy = this.targetY - this.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist < 5) {
+            this.isExploding = true;
+            this.explodeTimer = 1; // Lasts 1s
+            game.screenShakeDuration = 10;
+            audioManager.playSound('finalbossExplosion');
+        } else {
+            this.x += (dx / dist) * this.speed * 60 * dt;
+            this.y += (dy / dist) * this.speed * 60 * dt;
+        }
+        return false;
+    }
+}
+
 export class Asteroid {
     constructor(game, options = {}) {
         this.isBoss = options.isBoss ?? false;
@@ -531,6 +729,10 @@ export class Asteroid {
         // Weaver specific
         this.baseX = this.x;
         this.weaverTime = 0;
+
+        // Anchor specific
+        this.anchorTarget = null;
+        this.protectedBy = null;
 
         if (this.isBoss) {
             this.type = 'boss';
@@ -561,6 +763,22 @@ export class Asteroid {
             case 'bulwark': // VOID LEGION
                 this.size = 40; this.speed = 0.5; this.health = 10 * healthMultiplier; this.color = '#444'; // Dark Grey
                 break;
+            case 'sizzler': // NEW VOID LEGION
+                this.size = 50; this.speed = 0.5; this.health = 25 * healthMultiplier; this.color = '#ff6600'; // Orange
+                break;
+            case 'juggler': // NEW VOID LEGION
+                this.size = 25; this.speed = 2.5; this.health = 4 * healthMultiplier; this.color = '#00ff00'; // Green
+                this.pushRadius = 200;
+                break;
+            case 'anchor': // NEW VOID LEGION
+                this.size = 15; this.speed = 4; this.health = 3 * healthMultiplier; this.color = '#ffffff'; // White
+                break;
+            case 'tanker': // NEW VOID LEGION
+                this.size = 45; this.speed = 1; this.health = 30 * healthMultiplier; this.color = '#8B4513'; // SaddleBrown
+                break;
+            case 'stunner': // NEW VOID LEGION
+                this.size = 30; this.speed = 0.5; this.health = 15 * healthMultiplier; this.color = '#FFFFE0'; // LightYellow
+                break;
             // ... (Existing types kept same) ...
             case 'scout': this.size = 12; this.speed = Math.random() * 2 + 2.5; this.health = 1 * healthMultiplier; this.color = '#add8e6'; break;
             case 'brute': this.size = 35; this.speed = Math.random() * 1 + 0.8; this.health = 2 * healthMultiplier; this.color = '#d2b48c'; break;
@@ -571,6 +789,8 @@ export class Asteroid {
             case 'teleporter': this.size = 28; this.speed = 0.2; this.health = 3 * healthMultiplier; this.color = '#00ffcc'; this.fireCooldown = 1500; break;
             case 'standard': default: this.size = options.size ?? (Math.random() * 20 + 15); this.speed = Math.random() * 2 + 1; this.health = 1 * healthMultiplier; this.color = '#a9a9a9'; break;
         }
+
+        this.maxHealth = this.health; // Set Max Health
 
         // --- RANDOMIZED SHAPE GENERATION ---
         this.shape = [];
@@ -588,6 +808,21 @@ export class Asteroid {
         } else if (this.type === 'orbiter') {
             sides = 6; // Hexagon-ish
             jaggedness = 0.2; // Techy
+        } else if (this.type === 'sizzler') {
+            sides = 4; // Rectangle
+            jaggedness = 0.0;
+        } else if (this.type === 'juggler') {
+            sides = 8;
+            jaggedness = 0.3;
+        } else if (this.type === 'anchor') {
+            sides = 4; // Diamond/Cross
+            jaggedness = 0.5;
+        } else if (this.type === 'tanker') {
+            sides = 8; // Octagon
+            jaggedness = 0.1;
+        } else if (this.type === 'stunner') {
+             sides = 5; // Pentagon
+             jaggedness = 0.1;
         }
 
         for (let i = 0; i < sides; i++) {
@@ -651,6 +886,29 @@ export class Asteroid {
 
         ctx.restore();
         
+        // Anchor Line
+        if (this.type === 'anchor' && this.anchorTarget) {
+            ctx.save();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(this.x, this.y);
+            ctx.lineTo(this.anchorTarget.x, this.anchorTarget.y);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // Protected Icon
+        if (this.protectedBy) {
+            ctx.save();
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '20px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText("🛡️", this.x, this.y - this.size - 10);
+            ctx.restore();
+        }
+
         // Health Text
         if (this.health > 1) {
             ctx.fillStyle = 'white';
@@ -701,6 +959,98 @@ export class Asteroid {
         } else if (this.type === 'bulwark') {
             this.y += this.speed * moveFactor; // Slow march
 
+        } else if (this.type === 'sizzler') {
+            this.y += this.speed * moveFactor; // Straight line, slow
+
+        } else if (this.type === 'juggler') {
+            if (game.player && !game.player.isDestroyed) {
+                const dx = game.player.x - this.x;
+                const dy = game.player.y - this.y;
+                const dist = Math.hypot(dx, dy);
+
+                // Movement Logic: Maintain 150px distance
+                const targetDist = 150;
+                if (dist > targetDist + 10) {
+                    this.x += (dx / dist) * this.speed * moveFactor;
+                    this.y += (dy / dist) * this.speed * moveFactor;
+                } else if (dist < targetDist - 10) {
+                    this.x -= (dx / dist) * this.speed * moveFactor;
+                    this.y -= (dy / dist) * this.speed * moveFactor;
+                } else {
+                    // Orbit slightly if at sweet spot
+                     this.x += Math.sin(Date.now() / 500) * this.speed * moveFactor;
+                }
+
+                // Push Logic
+                if (dist < this.pushRadius) {
+                    // Draw force field effect
+                    ctx.save();
+                    ctx.strokeStyle = 'rgba(0, 255, 0, 0.3)';
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.pushRadius, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.restore();
+
+                    // Push player
+                    // Direction is random or away. Requirement says: "random direction or push away".
+                    // Let's do random for more chaos as per "Juggler" name.
+                    if (Math.random() < 0.1) {
+                         const pushForce = (Math.random() - 0.5) * 5; // Random left/right push
+                         game.player.vx += pushForce;
+                    }
+                }
+            } else {
+                 this.y += this.speed * moveFactor;
+            }
+
+        } else if (this.type === 'anchor') {
+            // Find target if none
+            if (!this.anchorTarget || this.anchorTarget.health <= 0 || !game.asteroids.includes(this.anchorTarget)) {
+                this.anchorTarget = null;
+                // Look for big enemies
+                const potentialTargets = game.asteroids.filter(a =>
+                    (a.type === 'bulwark' || a.type === 'brute' || a.type === 'sizzler') &&
+                    a !== this && !a.protectedBy
+                );
+
+                if (potentialTargets.length > 0) {
+                    // Pick closest
+                    let minD = Infinity;
+                    for (const t of potentialTargets) {
+                        const d = Math.hypot(this.x - t.x, this.y - t.y);
+                        if (d < minD) {
+                            minD = d;
+                            this.anchorTarget = t;
+                        }
+                    }
+                }
+            }
+
+            if (this.anchorTarget) {
+                this.anchorTarget.protectedBy = this;
+                // Orbit/Follow Logic
+                const dx = this.anchorTarget.x - this.x;
+                const dy = this.anchorTarget.y - this.y;
+                const dist = Math.hypot(dx, dy);
+                const desiredDist = this.anchorTarget.size + 40;
+
+                if (dist > desiredDist + 5) {
+                    this.x += (dx / dist) * this.speed * 1.5 * moveFactor; // Catch up fast
+                    this.y += (dy / dist) * this.speed * 1.5 * moveFactor;
+                } else if (dist < desiredDist - 5) {
+                    this.x -= (dx / dist) * this.speed * moveFactor;
+                    this.y -= (dy / dist) * this.speed * moveFactor;
+                } else {
+                    // Orbit
+                    const angle = Math.atan2(dy, dx) + (0.05 * moveFactor);
+                    this.x = this.anchorTarget.x - Math.cos(angle) * desiredDist;
+                    this.y = this.anchorTarget.y - Math.sin(angle) * desiredDist;
+                }
+            } else {
+                // No target, just move down
+                this.y += this.speed * moveFactor;
+            }
+
         } else if (this.type === 'seeker') {
              if (game.player && !game.player.isDestroyed) {
                  const dx = game.player.x - this.x;
@@ -739,6 +1089,151 @@ export class Asteroid {
             game.enemyProjectiles.push(new Projectile(this.x, this.y, { vx, vy, color: '#ff69b4', size: 4 }));
             audioManager.playSound('enemyShoot', 0.4);
             this.lastFireTime = Date.now();
+        }
+
+        // Stunner Logic
+        if (this.type === 'stunner' && !game.isGameOver && Date.now() - this.lastFireTime > 5000) { // Fires every 5s
+             // Find target: Random Ally or Player if no allies
+             const targets = [...game.player.allies];
+             if (game.laserAlly) targets.push(game.laserAlly);
+             if (game.echoAlly) targets.push(game.echoAlly);
+             if (game.echoAlly2) targets.push(game.echoAlly2);
+
+             if (targets.length > 0) {
+                 const target = targets[Math.floor(Math.random() * targets.length)];
+                 // Instant hit stun beam (visual effect handled here or in draw?)
+                 // Let's create a visual projectile but instant effect
+                 target.isStunned = true;
+                 target.stunTimer = 5; // 5 seconds
+
+                 // Create Stun Beam Effect
+                 game.particles.push(new Particle(this.x, this.y, '#ffff00')); // Simple placeholder
+
+                 // Draw beam (hacky: create a fast temporary projectile or just draw in its draw method?)
+                 // Let's create a special projectile that is just visual
+                 game.enemyProjectiles.push(new Projectile(this.x, this.y, { vx: 0, vy: 0, color: 'transparent', size: 0 })); // dummy
+                 // Actually, let's just use game.createExplosion for visual feedback on target
+                 game.createExplosion(target.x, target.y, '#ffff00', 10);
+                 game.updateGameStatus("Ally Stunned!");
+
+                 this.lastFireTime = Date.now();
+             }
+        }
+    }
+}
+
+export class BehemothTurret extends Asteroid {
+    constructor(game) {
+        super(game, { isBoss: true });
+        this.size = 80;
+        this.x = canvas.width / 2;
+        this.y = -this.size;
+        this.speed = 0.5;
+        this.health = 2000;
+        this.maxHealth = 2000;
+        this.color = '#800000'; // Maroon
+        this.type = 'behemoth';
+
+        this.phase = 'enter'; // enter, attack, idle
+        this.phaseTimer = 0;
+        this.targetY = 100;
+        this.gunAngle = 0;
+        this.bombCooldown = 5000;
+        this.lastBombTime = 0;
+    }
+
+    draw(game) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // Body
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.rect(-this.size, -this.size/2, this.size * 2, this.size);
+        ctx.fill();
+        ctx.strokeStyle = '#ff0000';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Guns
+        ctx.fillStyle = '#333';
+        ctx.fillRect(-this.size - 20, 0, 20, 40); // Left gun
+        ctx.fillRect(this.size, 0, 20, 40); // Right gun
+
+        // Heat Aura
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = 'orange';
+        ctx.beginPath();
+        ctx.arc(0, 0, this.size * 1.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+
+        // Health bar
+         const barWidth = 100;
+         const barHeight = 10;
+         const healthPercent = this.health / this.maxHealth;
+         ctx.fillStyle = 'red';
+         ctx.fillRect(this.x - barWidth/2, this.y - this.size - 20, barWidth * healthPercent, barHeight);
+         ctx.strokeStyle = 'white';
+         ctx.strokeRect(this.x - barWidth/2, this.y - this.size - 20, barWidth, barHeight);
+    }
+
+    update(game, dt) {
+        if (this.phase === 'enter') {
+            this.y += this.speed * 60 * dt;
+            if (this.y >= this.targetY) {
+                this.y = this.targetY;
+                this.phase = 'attack';
+                this.phaseTimer = 10; // 10s attack
+                game.updateGameStatus("Behemoth Turret Active!");
+                game.screenShakeDuration = 20;
+            }
+        } else if (this.phase === 'attack') {
+            this.phaseTimer -= dt;
+
+            // Wobble
+            this.x += Math.sin(Date.now() / 500) * 0.5;
+
+            // Aimed Shots Logic
+            if (game.player && !game.player.isDestroyed) {
+                if (Math.floor(Date.now() / 100) % 2 === 0) { // High frequency (approx every 200ms)
+                    const speed = 7;
+
+                    // Left Gun Aim
+                    const angleL = Math.atan2(game.player.y - (this.y + 20), game.player.x - (this.x - this.size - 10));
+                    const vxL = Math.cos(angleL) * speed;
+                    const vyL = Math.sin(angleL) * speed;
+                    game.enemyProjectiles.push(new Projectile(this.x - this.size - 10, this.y + 20, { vx: vxL, vy: vyL, color: 'orange', size: 6 }));
+
+                    // Right Gun Aim
+                    const angleR = Math.atan2(game.player.y - (this.y + 20), game.player.x - (this.x + this.size + 10));
+                    const vxR = Math.cos(angleR) * speed;
+                    const vyR = Math.sin(angleR) * speed;
+                    game.enemyProjectiles.push(new Projectile(this.x + this.size + 10, this.y + 20, { vx: vxR, vy: vyR, color: 'orange', size: 6 }));
+                }
+            }
+
+            // Bomb Skill
+            if (Date.now() - this.lastBombTime > this.bombCooldown) {
+                const targetX = Math.random() * (canvas.width - 40) + 20;
+                const targetY = Math.random() * (canvas.height - 100) + 100;
+                game.enemyProjectiles.push(new BehemothBomb(this.x, this.y, targetX, targetY));
+                this.lastBombTime = Date.now();
+                game.updateGameStatus("Behemoth Launching Bomb!");
+            }
+
+            if (this.phaseTimer <= 0) {
+                this.phase = 'idle';
+                this.phaseTimer = 15; // 15s idle
+            }
+        } else if (this.phase === 'idle') {
+            this.phaseTimer -= dt;
+            // Regen? Or just sit there.
+            if (this.phaseTimer <= 0) {
+                this.phase = 'attack';
+                this.phaseTimer = 10;
+            }
         }
     }
 }
