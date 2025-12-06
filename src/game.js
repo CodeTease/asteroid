@@ -16,6 +16,7 @@ export class Game {
         this.coolants = []; // New drop items
         this.score = 0;
         this.gameTime = 0;
+        this.voidStartTime = 0; // Initialize voidStartTime
         this.deltaTime = 0;
         this.lastTime = 0;
         this.nextBossTime = 0;
@@ -82,6 +83,7 @@ export class Game {
         this.coolants = [];
         this.score = 0;
         this.gameTime = 0;
+        this.voidStartTime = 0; // Reset voidStartTime
         this.deltaTime = 0;
         this.lastTime = 0;
         this.lastSpawnTime = 0;
@@ -170,7 +172,7 @@ export class Game {
         }
 
         // VOID MODE 100s TRIGGER
-        if (this.finalBossDefeated && this.gameTime >= 100 && !this.selectedSkill && !this.isPaused) {
+        if (this.finalBossDefeated && this.getVoidTime() >= 100 && !this.selectedSkill && !this.isPaused) {
              this.showVoidSkillSelection();
         }
 
@@ -216,6 +218,10 @@ export class Game {
             this.updateHUD();
             this.checkUpgrades();
         }
+    }
+
+    getVoidTime() {
+        return Math.max(0, this.gameTime - this.voidStartTime);
     }
     
     draw() {
@@ -292,7 +298,7 @@ export class Game {
         }
 
         // VOID MODE BEHEMOTH SPAWN (at 150s Void Time)
-        if (this.finalBossDefeated && this.gameTime >= 150 && !this.behemothSpawned) {
+        if (this.finalBossDefeated && this.getVoidTime() >= 150 && !this.behemothSpawned) {
              this.asteroids.push(new BehemothTurret(this));
              this.behemothSpawned = true;
              this.isBossActive = true;
@@ -313,7 +319,7 @@ export class Game {
 
     getSpawnType() {
         const isVoid = this.finalBossDefeated;
-        const t = this.gameTime;
+        const t = isVoid ? this.getVoidTime() : this.gameTime;
         const weights = [];
 
         if (!isVoid) {
@@ -522,7 +528,7 @@ export class Game {
                     let damage = this.projectiles[i].damage;
 
                     // VOID MODE GLOBAL DAMAGE BUFF (x2) - STARTS AT 100s+
-                    if (this.finalBossDefeated && this.gameTime >= 100) damage *= 2;
+                    if (this.finalBossDefeated && this.getVoidTime() >= 100) damage *= 2;
 
                     asteroid.health -= damage;
 
@@ -557,7 +563,7 @@ export class Game {
                 UI.heatGroup.style.display = 'flex'; // Show Heat Bar
                 
                 // VOID TIME RESET
-                this.gameTime = 0;
+                this.voidStartTime = this.gameTime;
                 UI.timerLabel.innerText = "Void Time";
 
                 this.upgradePoints += 10;
@@ -693,7 +699,8 @@ export class Game {
     updateHUD() {
         UI.scoreDisplay.innerText = `${this.score}`;
         UI.shieldDisplay.innerText = `${this.player.shieldCharges}`;
-        UI.timerDisplay.innerText = `${Math.floor(this.gameTime)}s`;
+        const displayTime = this.finalBossDefeated ? this.getVoidTime() : this.gameTime;
+        UI.timerDisplay.innerText = `${Math.floor(displayTime)}s`;
         UI.updateUpgradePoints(this.upgradePoints);
         
         // Update Heat Bar

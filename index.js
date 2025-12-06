@@ -176,6 +176,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const debugSpawnEnemy = document.getElementById('debug-spawn-enemy');
     const debugEnemySelect = document.getElementById('debug-enemy-select');
     const debugAddScore = document.getElementById('debug-add-score');
+    const debugKillAll = document.getElementById('debug-kill-all');
     const debugGodMode = document.getElementById('debug-god-mode');
 
     // Make Void Enemies Selectable in Debug
@@ -217,6 +218,26 @@ window.addEventListener('DOMContentLoaded', () => {
         game.score += 1000;
         game.upgradePoints += 10;
         game.updateHUD();
+    });
+
+    debugKillAll.addEventListener('click', () => {
+        // Iterate backwards to safely remove
+        for (let i = game.asteroids.length - 1; i >= 0; i--) {
+            const asteroid = game.asteroids[i];
+            if (!asteroid.isBoss) { // Don't kill Boss/Mini-boss usually, but request said "all enemies"
+                 // Setting health to 0 triggers explosion and drops in game loop
+                 asteroid.health = 0;
+                 // Force immediate handle if we want instant clear, but letting game loop handle it
+                 // creates a nice chain reaction of explosions.
+                 // However, let's call handleAsteroidDestruction directly to ensure they are gone now
+                 game.handleAsteroidDestruction(asteroid, i);
+            } else {
+                 // For bosses, maybe just deal massive damage?
+                 // Request said "Kill all". Let's kill bosses too.
+                 asteroid.health = 0;
+                 game.handleAsteroidDestruction(asteroid, i);
+            }
+        }
     });
 
     debugGodMode.addEventListener('change', () => {
