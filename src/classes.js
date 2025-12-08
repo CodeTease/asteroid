@@ -1,10 +1,8 @@
+import { Game } from "./game.js";
 import { canvas, ctx } from "./ui.js";
 import { audioManager } from "./audio.js";
 
 // --- GAME CLASSES ---
-
-
-
 
 export class Player {
     constructor() {
@@ -109,8 +107,8 @@ export class Player {
         if (!this.isOverheated && this.heat > 0) {
             // Check for Sizzler
             const hasSizzler = game.asteroids.some(a => a.type === 'sizzler');
-            // Check for BehemothTurret by type to avoid TDZ issues
-            const hasBehemoth = game.asteroids.some(a => a.type === 'behemoth');
+            // Check for BehemothTurret
+            const hasBehemoth = game.asteroids.some(a => a instanceof BehemothTurret);
 
             let decayRate = 40;
             if (hasSizzler) decayRate = 20;
@@ -128,8 +126,8 @@ export class Player {
         if (game.isAimUnlocked && !game.isNoHeatMode) {
             // Check for Sizzler
             const hasSizzler = game.asteroids.some(a => a.type === 'sizzler');
-             // Check for BehemothTurret by type to avoid TDZ issues
-            const hasBehemoth = game.asteroids.some(a => a.type === 'behemoth');
+             // Check for BehemothTurret
+            const hasBehemoth = game.asteroids.some(a => a instanceof BehemothTurret);
 
             let heatGen = 10;
             if (hasSizzler) heatGen = 12;
@@ -191,223 +189,6 @@ export class Player {
     }
 }
 
-// MiniBehemoth will be defined after BehemothTurret to avoid TDZ issues
-
-export class Monolith extends Asteroid {
-    constructor(game) {
-        super(game, { isBoss: true });
-        this.size = 150;
-        this.x = canvas.width / 2;
-        this.y = -200;
-        this.initialY = 150;
-        this.health = 3000;
-        this.maxHealth = 3000;
-        this.color = '#000000'; // Vantablack
-        this.type = 'monolith';
-        
-        this.coolingNodes = [
-            { x: -50, y: 50, hp: 300, active: true },
-            { x: 50, y: 50, hp: 300, active: true },
-            { x: 0, y: 100, hp: 300, active: true }
-        ];
-        
-        this.state = 'enter'; // enter, idle, attack, stunned
-        this.stateTimer = 0;
-        this.gravityPressActive = false;
-        this.gravityTimer = 0;
-    }
-
-    draw(game) {
-        ctx.save();
-        ctx.translate(this.x, this.y);
-        
-        // Vantablack Body
-        ctx.fillStyle = 'black';
-        ctx.shadowColor = '#800080'; // Purple
-        ctx.shadowBlur = 30;
-        ctx.fillRect(-this.size/2, -this.size/2, this.size, this.size);
-        
-        // Purple Outline (Vibrating)
-        ctx.strokeStyle = `rgba(128, 0, 128, ${0.5 + Math.random() * 0.5})`;
-        ctx.lineWidth = 5;
-        ctx.strokeRect(-this.size/2, -this.size/2, this.size, this.size);
-
-        // Cooling Nodes
-        this.coolingNodes.forEach(node => {
-            if (node.active) {
-                ctx.fillStyle = '#00ffff'; // Blue
-                ctx.shadowColor = '#00ffff';
-                ctx.shadowBlur = 15;
-                ctx.beginPath();
-                ctx.arc(node.x, node.y, 15, 0, Math.PI * 2);
-                ctx.fill();
-            }
-        });
-
-        // Stunned Effect
-        if (this.state === 'stunned') {
-             ctx.fillStyle = 'yellow';
-             ctx.font = '30px Arial';
-             ctx.fillText("⚡ STUNNED ⚡", -100, 0);
-        }
-
-        ctx.restore();
-
-        // Gravity Press Visual
-        if (this.gravityPressActive) {
-             ctx.save();
-             const grad = ctx.createLinearGradient(0, this.y + this.size/2, 0, canvas.height);
-             grad.addColorStop(0, 'rgba(128, 0, 128, 0.5)');
-             grad.addColorStop(1, 'rgba(128, 0, 128, 0)');
-             ctx.fillStyle = grad;
-             ctx.fillRect(0, this.y + this.size/2, canvas.width, canvas.height);
-             ctx.restore();
-        }
-    }
-
-    update(game, dt) {
-        if (this.state === 'enter') {
-            this.y += 20 * dt;
-            if (this.y >= this.initialY) {
-                this.y = this.initialY;
-                this.state = 'idle';
-                this.stateTimer = 2;
-                game.updateGameStatus("MONOLITH DESCENDS!");
-                game.screenShakeDuration = 60;
-            }
-            return;
-        }
-
-        if (this.state === 'stunned') {
-            this.stateTimer -= dt;
-            if (this.stateTimer <= 0) {
-                this.state = 'idle';
-                this.stateTimer = 2;
-                // Respawn nodes if all dead? Or just recover?
-                // Logic says: "Bắn nổ các điểm này... Boss bị Stun". 
-                // Suggests nodes might regenerate or it's a one-time weakness phase. 
-                // Let's regenerate them with lower HP to keep mechanic active.
-                if (this.coolingNodes.every(n => !n.active)) {
-                     this.coolingNodes.forEach(n => { n.active = true; n.hp = 200; });
-                }
-            }
-            return;
-        }
-
-        // Logic check for nodes
-        // Hit detection for nodes is complex in standard collision. 
-        // We will assume player shoots body, and damage distributes or we check node collision manually in Game class.
-        // For simplicity: If Monolith takes damage, check if it hit a node area?
-        // Actually, let's implement the node hit logic in Game.checkCollisions or here if we pass projectiles.
-        // Since Game handles collisions, we'll need to modify Game.js to handle node hits.
-
-        if (this.state === 'idle') {
-            this.stateTimer -= dt;
-            if (this.stateTimer <= 0) {
-                this.state = 'attack';
-                this.stateTimer = 5; // Time between attacks
-                this.chooseAttack(game);
-            }
-        } else if (this.state === 'attack') {
-             this.stateTimer -= dt;
-             if (this.stateTimer <= 0) {
-                 this.state = 'idle';
-                 this.stateTimer = 3;
-                 this.gravityPressActive = false; // Reset gravity
-             }
-        }
-
-        // Gravity Press Effect
-        if (this.gravityPressActive) {
-             if (game.player) {
-                 game.player.y += 200 * dt; // Push down
-                 if (game.player.y > canvas.height - 40) game.player.y = canvas.height - 40;
-             }
-             this.gravityTimer -= dt;
-             if (this.gravityTimer <= 0) {
-                 // SLAM
-                 game.takeBarrierDamage(25);
-                 game.createExplosion(game.player.x, canvas.height, '#800080', 50);
-                 game.updateGameStatus("MONOLITH SLAM! BARRIER CRITICAL!");
-                 this.gravityPressActive = false;
-             }
-        }
-    }
-
-    chooseAttack(game) {
-        const rand = Math.random();
-        if (rand < 0.4) {
-            // Legion Gate
-            game.updateGameStatus("Legion Gate Opened!");
-            for(let i=0; i<3; i++) {
-                // Spawn Elites
-                const type = ['juggler', 'sizzler', 'tanker'][Math.floor(Math.random()*3)];
-                game.asteroids.push(new Asteroid(game, { type, isElite: true, x: Math.random() * canvas.width, y: -50 }));
-            }
-        } else if (rand < 0.7) {
-            // Mini Behemoth
-            game.updateGameStatus("Mini-Behemoth Deployed!");
-            game.asteroids.push(new MiniBehemoth(game, Math.random() * (canvas.width - 100) + 50, 200));
-        } else {
-            // Gravity Press
-            game.updateGameStatus("GRAVITY PRESS! BREAK THE NODES!");
-            this.gravityPressActive = true;
-            this.gravityTimer = 10; // 10s to stop it
-        }
-    }
-
-    takeDamage(amount, source, hitX, hitY) {
-        // Resistances
-        let damage = amount;
-        if (source === 'ai_ally') return 0; // Immune
-        if (source === 'laser_ally') damage *= 0.1; // 90% resist
-        if (source === 'player') damage *= 0.5; // 50% resist
-        if (source === 'ultimate') {
-             // Absorb
-             this.health += 100;
-             return 0; 
-        }
-
-        // Check Node Hit
-        // Transform hitX/Y to local space
-        const localX = hitX - this.x;
-        const localY = hitY - this.y;
-        
-        let nodeHit = false;
-        for (const node of this.coolingNodes) {
-            if (node.active) {
-                const dist = Math.hypot(localX - node.x, localY - node.y);
-                if (dist < 20) {
-                    // Critical Hit on Node
-                    node.hp -= amount * 5; // Bonus damage to node
-                    damage = amount * 2; // Bonus damage to boss
-                    nodeHit = true;
-                    if (node.hp <= 0) {
-                        node.active = false;
-                        // Check all nodes
-                        if (this.coolingNodes.every(n => !n.active)) {
-                             // STUN TRIGGER
-                             this.state = 'stunned';
-                             this.stateTimer = 5;
-                             this.gravityPressActive = false; // Interrupt gravity
-                             // Clear Player Heat
-                             if (game.player) {
-                                 game.player.heat = 0;
-                                 game.player.isOverheated = false;
-                                 game.updateGameStatus("NODES DESTROYED! HEAT CLEARED! BOSS STUNNED!");
-                             }
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-
-        this.health -= damage;
-        return damage;
-    }
-}
-
 export class Projectile {
     constructor(x, y, options = {}) {
         this.x = x;
@@ -432,709 +213,6 @@ export class Projectile {
         const moveFactor = 60 * dt;
         this.x += this.vx * moveFactor;
         this.y += this.vy * moveFactor;
-    }
-}
-
-export class AIAlly extends Player {
-    constructor(side) {
-        super();
-        this.side = side;
-        this.size *= 0.7;
-        this.speed = 1;
-        this.projectileSize = 4;
-        this.projectileDamage = 1;
-        this.fireCooldown = 500;
-        this.lastFireTime = 0;
-        this.y = canvas.height - 40;
-        this.x = side === 'left' ? canvas.width / 4 : canvas.width * 3 / 4;
-        this.isRetreating = false;
-    }
-    draw() {
-        if (this.y < -this.size * 2) return;
-        ctx.save();
-        ctx.globalAlpha = this.alpha;
-        ctx.fillStyle = this.isStunned ? '#555' : '#007bff'; // Grey when stunned
-        ctx.beginPath();
-        ctx.moveTo(this.x, this.y);
-        ctx.lineTo(this.x - this.size, this.y + this.size * 2);
-        ctx.lineTo(this.x + this.size, this.y + this.size * 2);
-        ctx.closePath();
-        ctx.fill();
-
-        if (this.isStunned) {
-             ctx.fillStyle = 'yellow';
-             ctx.font = '12px Arial';
-             ctx.fillText("⚡", this.x - 4, this.y - 10);
-        }
-        ctx.restore();
-    }
-    update(game, dt) {
-        if (this.isRetreating) {
-            this.y -= this.speed * 60 * dt;
-            return;
-        }
-
-        if (this.isStunned) {
-            this.stunTimer -= dt;
-            if (this.stunTimer <= 0) this.isStunned = false;
-            return;
-        }
-
-        const patrolCenterX = this.side === 'left' ? canvas.width / 4 : canvas.width * 3 / 4;
-        const patrolRange = canvas.width / 5;
-        this.x = patrolCenterX + Math.sin(Date.now() / 800) * (patrolRange / 2);
-        this.y = canvas.height - 40;
-        const fireCooldowns = [500, 450, 400, 350, 320, 300];
-        this.fireCooldown = fireCooldowns[game.allyUpgrades.fireRateLevel];
-        if (!game.isGameOver && Date.now() - this.lastFireTime > this.fireCooldown) {
-            let bestTarget = null;
-            
-            // PRIORITY TARGETING FOR AI ALLY
-            // Mini-Behemoth > Elite/Linked (Legion Gate) > Monolith > Others
-            
-            const miniBehemoth = game.asteroids.find(a => a.type === 'mini_behemoth');
-            if (miniBehemoth) {
-                bestTarget = miniBehemoth;
-            }
-
-            if (!bestTarget) {
-                // Elite or Linked (Enraged) - High priority
-                const highPriority = game.asteroids.find(a => a.isElite || a.isEnraged);
-                if (highPriority) {
-                    bestTarget = highPriority;
-                }
-            }
-
-            if (!bestTarget && game.isFinalBossActive && game.finalBoss) {
-                 bestTarget = game.finalBoss;
-            } 
-            
-            if (!bestTarget && game.isBossActive) {
-                bestTarget = game.asteroids.find(a => a.isBoss) ?? null;
-            } 
-            
-            if (!bestTarget) {
-                let minDistance = Infinity;
-                for (const asteroid of game.asteroids) {
-                    const isOnCorrectSide = (this.side === 'left' && asteroid.x < canvas.width / 2) ||
-                        (this.side === 'right' && asteroid.x >= canvas.width / 2);
-                    if (isOnCorrectSide) {
-                        const distance = Math.hypot(this.x - asteroid.x, this.y - asteroid.y);
-                        if (distance < minDistance) {
-                            minDistance = distance;
-                            bestTarget = asteroid;
-                        }
-                    }
-                }
-            }
-            if (bestTarget) {
-                this.shootAt(game, bestTarget);
-            }
-            this.lastFireTime = Date.now();
-        }
-    }
-    shootAt(game, target) {
-        audioManager.playSound('shoot', 0.2);
-        const dx = target.x - this.x;
-        const dy = target.y - this.y;
-        const dist = Math.hypot(dx, dy);
-        const baseSpeed = 8;
-        const speed = game.allyUpgrades.hasFasterProjectiles ? baseSpeed * 1.5 : baseSpeed;
-        const projectileOptions = { size: this.projectileSize, damage: this.projectileDamage, source: 'ai_ally' };
-        if (game.allyUpgrades.hasDoubleShot) {
-            const angle = Math.atan2(dy, dx);
-            const spread = Math.PI / 18;
-            const vx1 = Math.cos(angle - spread) * speed;
-            const vy1 = Math.sin(angle - spread) * speed;
-            const vx2 = Math.cos(angle + spread) * speed;
-            const vy2 = Math.sin(angle + spread) * speed;
-            game.projectiles.push(new Projectile(this.x, this.y, { ...projectileOptions, vx: vx1, vy: vy1 }));
-            game.projectiles.push(new Projectile(this.x, this.y, { ...projectileOptions, vx: vx2, vy: vy2 }));
-        } else {
-            const vx = (dx / dist) * speed;
-            const vy = (dy / dist) * speed;
-            game.projectiles.push(new Projectile(this.x, this.y, { ...projectileOptions, vx, vy }));
-        }
-    }
-}
-
-export class LaserAlly extends Player {
-    constructor() {
-        super();
-        this.size *= 2; 
-        this.x = canvas.width / 2;
-        this.y = canvas.height - 70;
-        this.isRetreating = false;
-        this.isFiring = false;
-        this.laserTarget = null;
-        this.fireDuration = 10000; 
-        this.lastFireStopTime = 0;
-        this.cooldownDuration = 15000; 
-        this.laserDamage = 20; 
-    }
-    draw() {
-        if (this.y < -this.size * 2) return;
-        const now = Date.now();
-        const isOnCooldown = now - this.lastFireStopTime < this.cooldownDuration;
-
-        if (this.isStunned) {
-             ctx.save();
-             ctx.fillStyle = '#555';
-             ctx.beginPath();
-             ctx.moveTo(this.x, this.y);
-             ctx.lineTo(this.x - this.size, this.y + this.size * 2);
-             ctx.lineTo(this.x + this.size, this.y + this.size * 2);
-             ctx.closePath();
-             ctx.fill();
-             ctx.fillStyle = 'yellow';
-             ctx.font = '20px Arial';
-             ctx.fillText("⚡", this.x - 7, this.y + 20);
-             ctx.restore();
-             return;
-        }
-
-        if (isOnCooldown && !this.isFiring) {
-            ctx.save();
-            const cooldownProgress = (now - this.lastFireStopTime) / this.cooldownDuration;
-            ctx.strokeStyle = 'rgba(100, 100, 100, 0.5)';
-            ctx.lineWidth = 5;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y - this.size * 0.5, this.size * 0.8, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.strokeStyle = '#00e5ff';
-            ctx.beginPath();
-            ctx.arc(this.x, this.y - this.size * 0.5, this.size * 0.8, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * cooldownProgress));
-            ctx.stroke();
-            ctx.restore();
-        }
-        if (this.isFiring && this.laserTarget) {
-            ctx.save();
-            const laserWidth = Math.sin(Date.now() / 50) * 2 + 4;
-            ctx.strokeStyle = '#ff0000';
-            ctx.lineWidth = laserWidth;
-            ctx.shadowBlur = 20;
-            ctx.shadowColor = '#ff4500';
-            ctx.beginPath();
-            ctx.moveTo(this.x, this.y);
-            ctx.lineTo(this.laserTarget.x, this.laserTarget.y);
-            ctx.stroke();
-            ctx.restore();
-        }
-        ctx.save();
-        ctx.globalAlpha = this.alpha;
-        ctx.fillStyle = '#ffcc00'; 
-        ctx.beginPath();
-        ctx.moveTo(this.x, this.y);
-        ctx.lineTo(this.x - this.size, this.y + this.size * 2);
-        ctx.lineTo(this.x + this.size, this.y + this.size * 2);
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = '#00e5ff';
-        ctx.beginPath();
-        ctx.arc(this.x, this.y + this.size * 0.8, this.size * 0.4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-    }
-    update(game, dt) {
-        if (this.isRetreating) {
-            this.y -= 1 * 60 * dt;
-            if (this.isFiring) {
-                audioManager.stopLoopingSound('laseringSound');
-                this.isFiring = false;
-            }
-            return;
-        }
-
-        if (this.isStunned) {
-            this.stunTimer -= dt;
-            if (this.isFiring) {
-                audioManager.stopLoopingSound('laseringSound');
-                this.isFiring = false;
-            }
-            if (this.stunTimer <= 0) this.isStunned = false;
-            return;
-        }
-
-        this.x = canvas.width / 2;
-        const now = Date.now();
-        const isOnCooldown = now - this.lastFireStopTime < this.cooldownDuration;
-        let wasFiring = this.isFiring;
-        if (this.isFiring) {
-            if (now - (this.lastFireStopTime + this.cooldownDuration) > this.fireDuration) {
-                this.isFiring = false;
-                this.laserTarget = null;
-                this.lastFireStopTime = now;
-            }
-        } else if (!isOnCooldown) {
-            this.isFiring = true;
-            this.lastFireStopTime = now - this.cooldownDuration;
-        }
-        if (this.isFiring && !wasFiring) {
-            audioManager.playLoopingSound('laseringSound', 0.6);
-        } else if (!this.isFiring && wasFiring) {
-            audioManager.stopLoopingSound('laseringSound');
-        }
-        if (this.isFiring) {
-            let bestTarget = null;
-
-            // PRIORITY TARGETING FOR LASER ALLY
-            // Mini-Behemoth > Stunner > Legion Gate (Elite) > Monolith
-            
-            const miniBehemoth = game.asteroids.find(a => a.type === 'mini_behemoth');
-            if (miniBehemoth) {
-                bestTarget = miniBehemoth;
-            }
-
-            if (!bestTarget) {
-                const stunners = game.asteroids.filter(a => a.type === 'stunner');
-                if (stunners.length > 0) {
-                     // Pick closest stunner
-                    let minDistance = Infinity;
-                    for (const stunner of stunners) {
-                        const distance = Math.hypot(this.x - stunner.x, this.y - stunner.y);
-                        if (distance < minDistance) {
-                            minDistance = distance;
-                            bestTarget = stunner;
-                        }
-                    }
-                }
-            }
-            
-            if (!bestTarget) {
-                // Elite (Legion Gate)
-                const elites = game.asteroids.filter(a => a.isElite);
-                if (elites.length > 0) {
-                    // Closest elite
-                    let minDistance = Infinity;
-                    for (const elite of elites) {
-                        const distance = Math.hypot(this.x - elite.x, this.y - elite.y);
-                        if (distance < minDistance) {
-                            minDistance = distance;
-                            bestTarget = elite;
-                        }
-                    }
-                }
-            }
-
-            if (!bestTarget) {
-                if (game.isFinalBossActive && game.finalBoss) {
-                    bestTarget = game.finalBoss;
-                } else if (game.isBossActive) {
-                    // Target mini-bosses (like BehemothTurret)
-                    bestTarget = game.asteroids.find(a => a.isBoss);
-                }
-
-                if (!bestTarget) {
-                    let minDistance = Infinity;
-                    for (const asteroid of game.asteroids) {
-                        const distance = Math.hypot(this.x - asteroid.x, this.y - asteroid.y);
-                        if (distance < minDistance) {
-                            minDistance = distance;
-                            bestTarget = asteroid;
-                        }
-                    }
-                }
-            }
-
-            if (bestTarget) {
-                this.laserTarget = { x: bestTarget.x, y: bestTarget.y };
-
-                // Damage Logic
-                // Tanker takes 50% damage from Laser Ally
-                let damageMultiplier = 1;
-                if (bestTarget.type === 'tanker') damageMultiplier = 0.5;
-
-                // Void Mode Global Buff: x2 Damage (Starts at 100s+)
-                if (game.finalBossDefeated && game.gameTime >= 100) damageMultiplier *= 2;
-
-                bestTarget.health -= this.laserDamage * dt * damageMultiplier;
-            } else {
-                this.laserTarget = null;
-            }
-        }
-    }
-    applyUpgrades(game) {
-        const damageLevels = [20, 25, 32, 40, 50, 65]; 
-        const cooldownLevels = [15000, 14000, 13000, 11500, 10000, 8000];
-        this.laserDamage = damageLevels[game.allyUpgrades.laserDamageLevel];
-        this.cooldownDuration = cooldownLevels[game.allyUpgrades.laserCooldownLevel];
-    }
-}
-
-// --- NEW POST-BOSS CLASSES ---
-
-export class EchoAlly {
-    constructor() {
-        this.x = canvas.width / 2;
-        this.y = canvas.height - 100; // Start higher
-        this.size = 15;
-        this.floatTimer = 0; // For sine wave animation
-        this.isStunned = false;
-        this.stunTimer = 0;
-    }
-
-    draw(game) {
-        if (!game.player || game.player.isDestroyed) return;
-
-        ctx.save();
-        ctx.globalAlpha = 0.4; // Ghostly transparent
-        if (this.isStunned) {
-            ctx.globalAlpha = 1;
-            ctx.fillStyle = '#555'; // Grey when stunned
-        } else {
-            // Use player's rotation logic for the ghost
-            if (game && game.isAimUnlocked && game.mousePos) {
-                 const angle = Math.atan2(game.mousePos.y - this.y, game.mousePos.x - this.x);
-                 ctx.translate(this.x, this.y);
-                 ctx.rotate(angle + Math.PI / 2);
-                 ctx.translate(-this.x, -this.y);
-            }
-            ctx.fillStyle = '#00ffff'; // Cyan Ghost
-        }
-
-        ctx.beginPath();
-        ctx.moveTo(this.x, this.y + this.size * 2.2);
-        ctx.lineTo(this.x - this.size * 0.6, this.y + this.size * 1.8);
-        ctx.lineTo(this.x + this.size * 0.6, this.y + this.size * 1.8);
-        ctx.closePath();
-        ctx.fill();
-
-        if (!this.isStunned) ctx.fillStyle = '#aaddff';
-        ctx.beginPath();
-        ctx.moveTo(this.x, this.y);
-        ctx.lineTo(this.x - this.size, this.y + this.size * 2);
-        ctx.lineTo(this.x, this.y + this.size * 1.5);
-        ctx.lineTo(this.x + this.size, this.y + this.size * 2);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.restore();
-    }
-
-    update(game, dt) {
-        if (this.isStunned) {
-             this.stunTimer -= dt;
-             if (this.stunTimer <= 0) this.isStunned = false;
-        }
-
-        if (game.player && !game.player.isDestroyed) {
-            this.floatTimer += dt;
-            
-            // GHOSTLY DRIFT LOGIC
-            // Side to side movement (30px wide sine wave)
-            const floatX = Math.sin(this.floatTimer * 2) * 30; 
-            // Slight up and down hover (10px height)
-            const floatY = Math.sin(this.floatTimer * 4) * 10; 
-
-            // Target is ABOVE player now (-60px)
-            const targetX = game.player.x + floatX;
-            const targetY = game.player.y - 60 + floatY; 
-            
-            // Smoothly move towards target (Lower lerp factor = more drift/delay)
-            this.x += (targetX - this.x) * 3 * dt;
-            this.y += (targetY - this.y) * 3 * dt;
-        }
-    }
-}
-
-export class VampAlly {
-    constructor() {
-        this.size = 15;
-        this.x = canvas.width / 2;
-        this.y = canvas.height - 70;
-        this.floatTimer = 0;
-        this.damage = 1;
-        this.isFiring = false;
-        this.beamTarget = null;
-        this.isRetreating = false;
-    }
-
-    draw(game) {
-        if (!game.player || game.player.isDestroyed || this.isRetreating) return;
-
-        ctx.save();
-        // Visuals: Crimson red drone
-        ctx.fillStyle = '#dc143c'; // Crimson
-        
-        // Hover effect
-        const yOffset = Math.sin(this.floatTimer * 3) * 5;
-        const xOffset = Math.cos(this.floatTimer * 2) * 30;
-        
-        const drawX = game.player.x + xOffset - 40; // Left side of player
-        const drawY = game.player.y - 40 + yOffset;
-        
-        this.x = drawX;
-        this.y = drawY;
-
-        ctx.translate(drawX, drawY);
-        
-        // Drone Body
-        ctx.beginPath();
-        ctx.arc(0, 0, this.size, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Eye
-        ctx.fillStyle = '#ff0000';
-        ctx.shadowColor = 'red';
-        ctx.shadowBlur = 10;
-        ctx.beginPath();
-        ctx.arc(0, 0, this.size * 0.4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-
-        ctx.restore();
-
-        // Beam
-        if (this.isFiring && this.beamTarget) {
-            ctx.save();
-            ctx.strokeStyle = `rgba(220, 20, 60, ${0.5 + Math.sin(Date.now() / 50) * 0.5})`;
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.moveTo(this.x, this.y);
-            ctx.lineTo(this.beamTarget.x, this.beamTarget.y);
-            ctx.stroke();
-
-            // Siphon particles moving back
-            const dist = Math.hypot(this.beamTarget.x - this.x, this.beamTarget.y - this.y);
-            const particleCount = 3;
-            for (let i = 0; i < particleCount; i++) {
-                const t = ((Date.now() / 500) + (i / particleCount)) % 1;
-                const px = this.beamTarget.x + (this.x - this.beamTarget.x) * t;
-                const py = this.beamTarget.y + (this.y - this.beamTarget.y) * t;
-                ctx.fillStyle = '#00ff00'; // Green healing energy
-                ctx.beginPath();
-                ctx.arc(px, py, 2, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            ctx.restore();
-        }
-    }
-
-    update(game, dt) {
-        if (this.isRetreating) return;
-        
-        this.floatTimer += dt;
-
-        // Auto Attack Logic
-        // Target closest enemy
-        let bestTarget = null;
-        let minDistance = 300; // Range
-
-        for (const asteroid of game.asteroids) {
-             const dist = Math.hypot(this.x - asteroid.x, this.y - asteroid.y);
-             if (dist < minDistance) {
-                 minDistance = dist;
-                 bestTarget = asteroid;
-             }
-        }
-
-        if (bestTarget) {
-            this.isFiring = true;
-            this.beamTarget = bestTarget;
-            // Siphon Damage (Low but constant)
-            bestTarget.health -= this.damage * 10 * dt; 
-        } else {
-            this.isFiring = false;
-            this.beamTarget = null;
-        }
-    }
-}
-
-export class Coolant {
-    constructor(x, y) {
-        this.x = x;
-        this.y = y;
-        this.size = 10;
-        this.vy = 2;
-        this.color = '#00ffff'; // Cyan
-    }
-
-    draw() {
-        ctx.save();
-        ctx.fillStyle = this.color;
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = this.color;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Inner detail
-        ctx.fillStyle = '#fff';
-        ctx.font = '10px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText("❄", this.x, this.y + 4);
-        
-        ctx.restore();
-    }
-
-    update(dt) {
-        this.y += this.vy * 60 * dt;
-    }
-}
-
-export class StaticMine {
-    constructor(x, y) {
-        this.x = x;
-        this.y = y;
-        this.size = 8;
-        this.timer = 0;
-    }
-    
-    draw() {
-        ctx.save();
-        ctx.fillStyle = 'red';
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = 'red';
-        const scale = 1 + Math.sin(this.timer) * 0.3;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.size * scale, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-    }
-    
-    update(dt) {
-        this.timer += 5 * dt;
-    }
-}
-
-export class BehemothBomb {
-    constructor(x, y, targetX, targetY) {
-        this.x = x;
-        this.y = y;
-        this.targetX = targetX;
-        this.targetY = targetY;
-        this.size = 20;
-        this.speed = 1.5;
-        this.color = '#ff4500';
-        this.isExploding = false;
-        this.explosionRadius = 150;
-        this.explodeTimer = 0;
-    }
-
-    draw() {
-        if (this.isExploding) {
-            ctx.save();
-            ctx.fillStyle = `rgba(255, 69, 0, ${0.5 + Math.sin(Date.now() / 50) * 0.5})`;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.explosionRadius, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-        } else {
-            ctx.save();
-            ctx.fillStyle = this.color;
-            ctx.shadowBlur = 20;
-            ctx.shadowColor = 'red';
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-            ctx.fill();
-            // Pulse center
-            ctx.fillStyle = 'white';
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.size * 0.5 * (1 + Math.sin(Date.now() / 100) * 0.3), 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-        }
-    }
-
-    update(game, dt) {
-        if (this.isExploding) {
-            this.explodeTimer -= dt;
-            if (this.explodeTimer <= 0) return true; // Signal to remove
-
-            // Damage check (simple: if player in radius)
-            const dist = Math.hypot(game.player.x - this.x, game.player.y - this.y);
-            if (dist < this.explosionRadius && !game.player.isDestroyed) {
-                // Break shields instantly or kill
-                if (game.player.shieldCharges > 0) {
-                    game.player.shieldCharges = 0;
-                    game.updateGameStatus("SHIELD BROKEN BY BOMB!");
-                    game.screenShakeDuration = 20;
-                } else {
-                    game.handleGameOver("Obliterated by Behemoth Bomb!");
-                }
-            }
-            return false;
-        }
-
-        const dx = this.targetX - this.x;
-        const dy = this.targetY - this.y;
-        const dist = Math.hypot(dx, dy);
-
-        if (dist < 5) {
-            this.isExploding = true;
-            this.explodeTimer = 1; // Lasts 1s
-            game.screenShakeDuration = 10;
-            audioManager.playSound('finalbossExplosion');
-        } else {
-            this.x += (dx / dist) * this.speed * 60 * dt;
-            this.y += (dy / dist) * this.speed * 60 * dt;
-        }
-        return false;
-    }
-}
-
-export class GhostAsteroid extends Asteroid {
-    constructor(game) {
-        super(game, { type: 'standard' }); // Inherit standard stats initially
-        this.type = 'ghost';
-        this.color = '#333333'; // Darker base
-        this.isRevealed = false;
-        this.baseSpeed = this.speed;
-        this.alpha = 0.1; // Almost invisible
-    }
-
-    draw(game) {
-        ctx.save();
-        ctx.globalAlpha = this.alpha;
-        if (this.isRevealed) {
-             ctx.fillStyle = '#ffffff'; // Ghostly white when revealed
-             ctx.shadowColor = '#ffffff';
-             ctx.shadowBlur = 10;
-        } else {
-             ctx.fillStyle = this.color;
-        }
-        
-        ctx.beginPath();
-        ctx.moveTo(this.x + this.shape[0].x, this.y + this.shape[0].y);
-        for (let i = 1; i < this.shape.length; i++) {
-            ctx.lineTo(this.x + this.shape[i].x, this.y + this.shape[i].y);
-        }
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-    }
-
-    update(game, dt) {
-        // Visibility Logic (Move to update)
-        if (!this.isRevealed) {
-            let minDistance = Infinity;
-            const entities = [game.player, ...game.player.allies];
-            if (game.laserAlly) entities.push(game.laserAlly);
-            if (game.echoAlly) entities.push(game.echoAlly);
-            if (game.echoAlly2) entities.push(game.echoAlly2);
-            if (game.vampAlly) entities.push(game.vampAlly);
-
-            entities.forEach(e => {
-                if (e && !e.isDestroyed && !e.isRetreating) {
-                    const dist = Math.hypot(this.x - e.x, this.y - e.y);
-                    if (dist < minDistance) minDistance = dist;
-                }
-            });
-
-            // Flashlight Radius approx 150
-            if (minDistance < 150) {
-                this.isRevealed = true;
-                this.alpha = 1;
-            }
-        }
-
-        if (this.isRevealed) {
-             // Tăng tốc (Speed up)
-             this.y += this.baseSpeed * 2 * 60 * dt;
-        } else {
-             this.y += this.baseSpeed * 60 * dt;
-        }
     }
 }
 
@@ -1741,7 +819,6 @@ export class BehemothTurret extends Asteroid {
     }
 }
 
-// MiniBehemoth: small summoned variant of BehemothTurret
 export class MiniBehemoth extends BehemothTurret {
     constructor(game, x, y) {
         super(game);
@@ -1750,25 +827,308 @@ export class MiniBehemoth extends BehemothTurret {
         this.size = 40; // Smaller
         this.health = 500;
         this.maxHealth = 500;
-        this.isBoss = false;
+        this.isBoss = false; // Not a boss boss, just a summon
         this.type = 'mini_behemoth';
         this.phase = 'attack';
         this.targetY = y;
     }
+    // Override update to not do boss phases if needed, or keep simple
     update(game, dt) {
+        // Simple wobble and shoot
         this.y = this.targetY + Math.sin(Date.now() / 800) * 10;
+        
+        // Shoot
         if (Math.random() < 0.05) {
-            const target = game.player;
-            if (target) {
-                const angle = Math.atan2(target.y - this.y, target.x - this.x);
-                const speed = 5;
-                game.enemyProjectiles.push(new Projectile(this.x, this.y, {
-                    vx: Math.cos(angle) * speed,
-                    vy: Math.sin(angle) * speed,
-                    color: 'orange',
-                    size: 5
-                }));
+             const target = game.player;
+             if (target) {
+                 const angle = Math.atan2(target.y - this.y, target.x - this.x);
+                 const speed = 5;
+                 game.enemyProjectiles.push(new Projectile(this.x, this.y, {
+                     vx: Math.cos(angle) * speed,
+                     vy: Math.sin(angle) * speed,
+                     color: 'orange',
+                     size: 5
+                 }));
+             }
+        }
+    }
+}
+
+export class Monolith extends Asteroid {
+    constructor(game) {
+        super(game, { isBoss: true });
+        this.size = 150;
+        this.x = canvas.width / 2;
+        this.y = -200;
+        this.initialY = 150;
+        this.health = 3000;
+        this.maxHealth = 3000;
+        this.color = '#000000'; // Vantablack
+        this.type = 'monolith';
+        
+        this.coolingNodes = [
+            { x: -50, y: 50, hp: 300, active: true },
+            { x: 50, y: 50, hp: 300, active: true },
+            { x: 0, y: 100, hp: 300, active: true }
+        ];
+        
+        this.state = 'enter'; // enter, idle, attack, stunned
+        this.stateTimer = 0;
+        this.gravityPressActive = false;
+        this.gravityTimer = 0;
+    }
+
+    draw(game) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        
+        // Vantablack Body
+        ctx.fillStyle = 'black';
+        ctx.shadowColor = '#800080'; // Purple
+        ctx.shadowBlur = 30;
+        ctx.fillRect(-this.size/2, -this.size/2, this.size, this.size);
+        
+        // Purple Outline (Vibrating)
+        ctx.strokeStyle = `rgba(128, 0, 128, ${0.5 + Math.random() * 0.5})`;
+        ctx.lineWidth = 5;
+        ctx.strokeRect(-this.size/2, -this.size/2, this.size, this.size);
+
+        // Cooling Nodes
+        this.coolingNodes.forEach(node => {
+            if (node.active) {
+                ctx.fillStyle = '#00ffff'; // Blue
+                ctx.shadowColor = '#00ffff';
+                ctx.shadowBlur = 15;
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, 15, 0, Math.PI * 2);
+                ctx.fill();
             }
+        });
+
+        // Stunned Effect
+        if (this.state === 'stunned') {
+             ctx.fillStyle = 'yellow';
+             ctx.font = '30px Arial';
+             ctx.fillText("⚡ STUNNED ⚡", -100, 0);
+        }
+
+        ctx.restore();
+
+        // Gravity Press Visual
+        if (this.gravityPressActive) {
+             ctx.save();
+             const grad = ctx.createLinearGradient(0, this.y + this.size/2, 0, canvas.height);
+             grad.addColorStop(0, 'rgba(128, 0, 128, 0.5)');
+             grad.addColorStop(1, 'rgba(128, 0, 128, 0)');
+             ctx.fillStyle = grad;
+             ctx.fillRect(0, this.y + this.size/2, canvas.width, canvas.height);
+             ctx.restore();
+        }
+    }
+
+    update(game, dt) {
+        if (this.state === 'enter') {
+            this.y += 20 * dt;
+            if (this.y >= this.initialY) {
+                this.y = this.initialY;
+                this.state = 'idle';
+                this.stateTimer = 2;
+                game.updateGameStatus("MONOLITH DESCENDS!");
+                game.screenShakeDuration = 60;
+            }
+            return;
+        }
+
+        if (this.state === 'stunned') {
+            this.stateTimer -= dt;
+            if (this.stateTimer <= 0) {
+                this.state = 'idle';
+                this.stateTimer = 2;
+                // Respawn nodes if all dead? Or just recover?
+                // Logic says: "Bắn nổ các điểm này... Boss bị Stun". 
+                // Suggests nodes might regenerate or it's a one-time weakness phase. 
+                // Let's regenerate them with lower HP to keep mechanic active.
+                if (this.coolingNodes.every(n => !n.active)) {
+                     this.coolingNodes.forEach(n => { n.active = true; n.hp = 200; });
+                }
+            }
+            return;
+        }
+
+        // Logic check for nodes
+        // Hit detection for nodes is complex in standard collision. 
+        // We will assume player shoots body, and damage distributes or we check node collision manually in Game class.
+        // For simplicity: If Monolith takes damage, check if it hit a node area?
+        // Actually, let's implement the node hit logic in Game.checkCollisions or here if we pass projectiles.
+        // Since Game handles collisions, we'll need to modify Game.js to handle node hits.
+
+        if (this.state === 'idle') {
+            this.stateTimer -= dt;
+            if (this.stateTimer <= 0) {
+                this.state = 'attack';
+                this.stateTimer = 5; // Time between attacks
+                this.chooseAttack(game);
+            }
+        } else if (this.state === 'attack') {
+             this.stateTimer -= dt;
+             if (this.stateTimer <= 0) {
+                 this.state = 'idle';
+                 this.stateTimer = 3;
+                 this.gravityPressActive = false; // Reset gravity
+             }
+        }
+
+        // Gravity Press Effect
+        if (this.gravityPressActive) {
+             if (game.player) {
+                 game.player.y += 200 * dt; // Push down
+                 if (game.player.y > canvas.height - 40) game.player.y = canvas.height - 40;
+             }
+             this.gravityTimer -= dt;
+             if (this.gravityTimer <= 0) {
+                 // SLAM
+                 game.takeBarrierDamage(25);
+                 game.createExplosion(game.player.x, canvas.height, '#800080', 50);
+                 game.updateGameStatus("MONOLITH SLAM! BARRIER CRITICAL!");
+                 this.gravityPressActive = false;
+             }
+        }
+    }
+
+    chooseAttack(game) {
+        const rand = Math.random();
+        if (rand < 0.4) {
+            // Legion Gate
+            game.updateGameStatus("Legion Gate Opened!");
+            for(let i=0; i<3; i++) {
+                // Spawn Elites
+                const type = ['juggler', 'sizzler', 'tanker'][Math.floor(Math.random()*3)];
+                game.asteroids.push(new Asteroid(game, { type, isElite: true, x: Math.random() * canvas.width, y: -50 }));
+            }
+        } else if (rand < 0.7) {
+            // Mini Behemoth
+            game.updateGameStatus("Mini-Behemoth Deployed!");
+            game.asteroids.push(new MiniBehemoth(game, Math.random() * (canvas.width - 100) + 50, 200));
+        } else {
+            // Gravity Press
+            game.updateGameStatus("GRAVITY PRESS! BREAK THE NODES!");
+            this.gravityPressActive = true;
+            this.gravityTimer = 10; // 10s to stop it
+        }
+    }
+
+    takeDamage(amount, source, hitX, hitY) {
+        // Resistances
+        let damage = amount;
+        if (source === 'ai_ally') return 0; // Immune
+        if (source === 'laser_ally') damage *= 0.1; // 90% resist
+        if (source === 'player') damage *= 0.5; // 50% resist
+        if (source === 'ultimate') {
+             // Absorb
+             this.health += 100;
+             return 0; 
+        }
+
+        // Check Node Hit
+        // Transform hitX/Y to local space
+        const localX = hitX - this.x;
+        const localY = hitY - this.y;
+        
+        let nodeHit = false;
+        for (const node of this.coolingNodes) {
+            if (node.active) {
+                const dist = Math.hypot(localX - node.x, localY - node.y);
+                if (dist < 20) {
+                    // Critical Hit on Node
+                    node.hp -= amount * 5; // Bonus damage to node
+                    damage = amount * 2; // Bonus damage to boss
+                    nodeHit = true;
+                    if (node.hp <= 0) {
+                        node.active = false;
+                        // Check all nodes
+                        if (this.coolingNodes.every(n => !n.active)) {
+                             // STUN TRIGGER
+                             this.state = 'stunned';
+                             this.stateTimer = 5;
+                             this.gravityPressActive = false; // Interrupt gravity
+                             // Clear Player Heat
+                             if (game.player) {
+                                 game.player.heat = 0;
+                                 game.player.isOverheated = false;
+                                 game.updateGameStatus("NODES DESTROYED! HEAT CLEARED! BOSS STUNNED!");
+                             }
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        this.health -= damage;
+        return damage;
+    }
+}
+
+export class GhostAsteroid extends Asteroid {
+    constructor(game) {
+        super(game, { type: 'standard' }); // Inherit standard stats initially
+        this.type = 'ghost';
+        this.color = '#333333'; // Darker base
+        this.isRevealed = false;
+        this.baseSpeed = this.speed;
+        this.alpha = 0.1; // Almost invisible
+    }
+
+    draw(game) {
+        ctx.save();
+        ctx.globalAlpha = this.alpha;
+        if (this.isRevealed) {
+             ctx.fillStyle = '#ffffff'; // Ghostly white when revealed
+             ctx.shadowColor = '#ffffff';
+             ctx.shadowBlur = 10;
+        } else {
+             ctx.fillStyle = this.color;
+        }
+        
+        ctx.beginPath();
+        ctx.moveTo(this.x + this.shape[0].x, this.y + this.shape[0].y);
+        for (let i = 1; i < this.shape.length; i++) {
+            ctx.lineTo(this.x + this.shape[i].x, this.y + this.shape[i].y);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+    }
+
+    update(game, dt) {
+        // Visibility Logic (Move to update)
+        if (!this.isRevealed) {
+            let minDistance = Infinity;
+            const entities = [game.player, ...game.player.allies];
+            if (game.laserAlly) entities.push(game.laserAlly);
+            if (game.echoAlly) entities.push(game.echoAlly);
+            if (game.echoAlly2) entities.push(game.echoAlly2);
+            if (game.vampAlly) entities.push(game.vampAlly);
+
+            entities.forEach(e => {
+                if (e && !e.isDestroyed && !e.isRetreating) {
+                    const dist = Math.hypot(this.x - e.x, this.y - e.y);
+                    if (dist < minDistance) minDistance = dist;
+                }
+            });
+
+            // Flashlight Radius approx 150
+            if (minDistance < 150) {
+                this.isRevealed = true;
+                this.alpha = 1;
+            }
+        }
+
+        if (this.isRevealed) {
+             // Tăng tốc (Speed up)
+             this.y += this.baseSpeed * 2 * 60 * dt;
+        } else {
+             this.y += this.baseSpeed * 60 * dt;
         }
     }
 }
@@ -1926,6 +1286,643 @@ export class FinalBoss extends Asteroid {
                 }
                 break;
         }
+    }
+}
+
+export class AIAlly extends Player {
+    constructor(side) {
+        super();
+        this.side = side;
+        this.size *= 0.7;
+        this.speed = 1;
+        this.projectileSize = 4;
+        this.projectileDamage = 1;
+        this.fireCooldown = 500;
+        this.lastFireTime = 0;
+        this.y = canvas.height - 40;
+        this.x = side === 'left' ? canvas.width / 4 : canvas.width * 3 / 4;
+        this.isRetreating = false;
+    }
+    draw() {
+        if (this.y < -this.size * 2) return;
+        ctx.save();
+        ctx.globalAlpha = this.alpha;
+        ctx.fillStyle = this.isStunned ? '#555' : '#007bff'; // Grey when stunned
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(this.x - this.size, this.y + this.size * 2);
+        ctx.lineTo(this.x + this.size, this.y + this.size * 2);
+        ctx.closePath();
+        ctx.fill();
+
+        if (this.isStunned) {
+             ctx.fillStyle = 'yellow';
+             ctx.font = '12px Arial';
+             ctx.fillText("⚡", this.x - 4, this.y - 10);
+        }
+        ctx.restore();
+    }
+    update(game, dt) {
+        if (this.isRetreating) {
+            this.y -= this.speed * 60 * dt;
+            return;
+        }
+
+        if (this.isStunned) {
+            this.stunTimer -= dt;
+            if (this.stunTimer <= 0) this.isStunned = false;
+            return;
+        }
+
+        const patrolCenterX = this.side === 'left' ? canvas.width / 4 : canvas.width * 3 / 4;
+        const patrolRange = canvas.width / 5;
+        this.x = patrolCenterX + Math.sin(Date.now() / 800) * (patrolRange / 2);
+        this.y = canvas.height - 40;
+        const fireCooldowns = [500, 450, 400, 350, 320, 300];
+        this.fireCooldown = fireCooldowns[game.allyUpgrades.fireRateLevel];
+        if (!game.isGameOver && Date.now() - this.lastFireTime > this.fireCooldown) {
+            let bestTarget = null;
+            
+            // PRIORITY TARGETING FOR AI ALLY
+            // Mini-Behemoth > Elite/Linked (Legion Gate) > Monolith > Others
+            
+            const miniBehemoth = game.asteroids.find(a => a.type === 'mini_behemoth');
+            if (miniBehemoth) {
+                bestTarget = miniBehemoth;
+            }
+
+            if (!bestTarget) {
+                // Elite or Linked (Enraged) - High priority
+                const highPriority = game.asteroids.find(a => a.isElite || a.isEnraged);
+                if (highPriority) {
+                    bestTarget = highPriority;
+                }
+            }
+
+            if (!bestTarget && game.isFinalBossActive && game.finalBoss) {
+                 bestTarget = game.finalBoss;
+            } 
+            
+            if (!bestTarget && game.isBossActive) {
+                bestTarget = game.asteroids.find(a => a.isBoss) ?? null;
+            } 
+            
+            if (!bestTarget) {
+                let minDistance = Infinity;
+                for (const asteroid of game.asteroids) {
+                    const isOnCorrectSide = (this.side === 'left' && asteroid.x < canvas.width / 2) ||
+                        (this.side === 'right' && asteroid.x >= canvas.width / 2);
+                    if (isOnCorrectSide) {
+                        const distance = Math.hypot(this.x - asteroid.x, this.y - asteroid.y);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            bestTarget = asteroid;
+                        }
+                    }
+                }
+            }
+            if (bestTarget) {
+                this.shootAt(game, bestTarget);
+            }
+            this.lastFireTime = Date.now();
+        }
+    }
+    shootAt(game, target) {
+        audioManager.playSound('shoot', 0.2);
+        const dx = target.x - this.x;
+        const dy = target.y - this.y;
+        const dist = Math.hypot(dx, dy);
+        const baseSpeed = 8;
+        const speed = game.allyUpgrades.hasFasterProjectiles ? baseSpeed * 1.5 : baseSpeed;
+        const projectileOptions = { size: this.projectileSize, damage: this.projectileDamage, source: 'ai_ally' };
+        if (game.allyUpgrades.hasDoubleShot) {
+            const angle = Math.atan2(dy, dx);
+            const spread = Math.PI / 18;
+            const vx1 = Math.cos(angle - spread) * speed;
+            const vy1 = Math.sin(angle - spread) * speed;
+            const vx2 = Math.cos(angle + spread) * speed;
+            const vy2 = Math.sin(angle + spread) * speed;
+            game.projectiles.push(new Projectile(this.x, this.y, { ...projectileOptions, vx: vx1, vy: vy1 }));
+            game.projectiles.push(new Projectile(this.x, this.y, { ...projectileOptions, vx: vx2, vy: vy2 }));
+        } else {
+            const vx = (dx / dist) * speed;
+            const vy = (dy / dist) * speed;
+            game.projectiles.push(new Projectile(this.x, this.y, { ...projectileOptions, vx, vy }));
+        }
+    }
+}
+
+export class LaserAlly extends Player {
+    constructor() {
+        super();
+        this.size *= 2; 
+        this.x = canvas.width / 2;
+        this.y = canvas.height - 70;
+        this.isRetreating = false;
+        this.isFiring = false;
+        this.laserTarget = null;
+        this.fireDuration = 10000; 
+        this.lastFireStopTime = 0;
+        this.cooldownDuration = 15000; 
+        this.laserDamage = 20; 
+    }
+    draw() {
+        if (this.y < -this.size * 2) return;
+        const now = Date.now();
+        const isOnCooldown = now - this.lastFireStopTime < this.cooldownDuration;
+
+        if (this.isStunned) {
+             ctx.save();
+             ctx.fillStyle = '#555';
+             ctx.beginPath();
+             ctx.moveTo(this.x, this.y);
+             ctx.lineTo(this.x - this.size, this.y + this.size * 2);
+             ctx.lineTo(this.x + this.size, this.y + this.size * 2);
+             ctx.closePath();
+             ctx.fill();
+             ctx.fillStyle = 'yellow';
+             ctx.font = '20px Arial';
+             ctx.fillText("⚡", this.x - 7, this.y + 20);
+             ctx.restore();
+             return;
+        }
+
+        if (isOnCooldown && !this.isFiring) {
+            ctx.save();
+            const cooldownProgress = (now - this.lastFireStopTime) / this.cooldownDuration;
+            ctx.strokeStyle = 'rgba(100, 100, 100, 0.5)';
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y - this.size * 0.5, this.size * 0.8, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.strokeStyle = '#00e5ff';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y - this.size * 0.5, this.size * 0.8, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * cooldownProgress));
+            ctx.stroke();
+            ctx.restore();
+        }
+        if (this.isFiring && this.laserTarget) {
+            ctx.save();
+            const laserWidth = Math.sin(Date.now() / 50) * 2 + 4;
+            ctx.strokeStyle = '#ff0000';
+            ctx.lineWidth = laserWidth;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#ff4500';
+            ctx.beginPath();
+            ctx.moveTo(this.x, this.y);
+            ctx.lineTo(this.laserTarget.x, this.laserTarget.y);
+            ctx.stroke();
+            ctx.restore();
+        }
+        ctx.save();
+        ctx.globalAlpha = this.alpha;
+        ctx.fillStyle = '#ffcc00'; 
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(this.x - this.size, this.y + this.size * 2);
+        ctx.lineTo(this.x + this.size, this.y + this.size * 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#00e5ff';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y + this.size * 0.8, this.size * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+    update(game, dt) {
+        if (this.isRetreating) {
+            this.y -= 1 * 60 * dt;
+            if (this.isFiring) {
+                audioManager.stopLoopingSound('laseringSound');
+                this.isFiring = false;
+            }
+            return;
+        }
+
+        if (this.isStunned) {
+            this.stunTimer -= dt;
+            if (this.isFiring) {
+                audioManager.stopLoopingSound('laseringSound');
+                this.isFiring = false;
+            }
+            if (this.stunTimer <= 0) this.isStunned = false;
+            return;
+        }
+
+        this.x = canvas.width / 2;
+        const now = Date.now();
+        const isOnCooldown = now - this.lastFireStopTime < this.cooldownDuration;
+        let wasFiring = this.isFiring;
+        if (this.isFiring) {
+            if (now - (this.lastFireStopTime + this.cooldownDuration) > this.fireDuration) {
+                this.isFiring = false;
+                this.laserTarget = null;
+                this.lastFireStopTime = now;
+            }
+        } else if (!isOnCooldown) {
+            this.isFiring = true;
+            this.lastFireStopTime = now - this.cooldownDuration;
+        }
+        if (this.isFiring && !wasFiring) {
+            audioManager.playLoopingSound('laseringSound', 0.6);
+        } else if (!this.isFiring && wasFiring) {
+            audioManager.stopLoopingSound('laseringSound');
+        }
+        if (this.isFiring) {
+            let bestTarget = null;
+
+            // PRIORITY TARGETING FOR LASER ALLY
+            // Mini-Behemoth > Stunner > Legion Gate (Elite) > Monolith
+            
+            const miniBehemoth = game.asteroids.find(a => a.type === 'mini_behemoth');
+            if (miniBehemoth) {
+                bestTarget = miniBehemoth;
+            }
+
+            if (!bestTarget) {
+                const stunners = game.asteroids.filter(a => a.type === 'stunner');
+                if (stunners.length > 0) {
+                     // Pick closest stunner
+                    let minDistance = Infinity;
+                    for (const stunner of stunners) {
+                        const distance = Math.hypot(this.x - stunner.x, this.y - stunner.y);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            bestTarget = stunner;
+                        }
+                    }
+                }
+            }
+            
+            if (!bestTarget) {
+                // Elite (Legion Gate)
+                const elites = game.asteroids.filter(a => a.isElite);
+                if (elites.length > 0) {
+                    // Closest elite
+                    let minDistance = Infinity;
+                    for (const elite of elites) {
+                        const distance = Math.hypot(this.x - elite.x, this.y - elite.y);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            bestTarget = elite;
+                        }
+                    }
+                }
+            }
+
+            if (!bestTarget) {
+                if (game.isFinalBossActive && game.finalBoss) {
+                    bestTarget = game.finalBoss;
+                } else if (game.isBossActive) {
+                    // Target mini-bosses (like BehemothTurret)
+                    bestTarget = game.asteroids.find(a => a.isBoss);
+                }
+
+                if (!bestTarget) {
+                    let minDistance = Infinity;
+                    for (const asteroid of game.asteroids) {
+                        const distance = Math.hypot(this.x - asteroid.x, this.y - asteroid.y);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            bestTarget = asteroid;
+                        }
+                    }
+                }
+            }
+
+            if (bestTarget) {
+                this.laserTarget = { x: bestTarget.x, y: bestTarget.y };
+
+                // Damage Logic
+                // Tanker takes 50% damage from Laser Ally
+                let damageMultiplier = 1;
+                if (bestTarget.type === 'tanker') damageMultiplier = 0.5;
+
+                // Void Mode Global Buff: x2 Damage (Starts at 100s+)
+                if (game.finalBossDefeated && game.gameTime >= 100) damageMultiplier *= 2;
+
+                bestTarget.health -= this.laserDamage * dt * damageMultiplier;
+            } else {
+                this.laserTarget = null;
+            }
+        }
+    }
+    applyUpgrades(game) {
+        const damageLevels = [20, 25, 32, 40, 50, 65]; 
+        const cooldownLevels = [15000, 14000, 13000, 11500, 10000, 8000];
+        this.laserDamage = damageLevels[game.allyUpgrades.laserDamageLevel];
+        this.cooldownDuration = cooldownLevels[game.allyUpgrades.laserCooldownLevel];
+    }
+}
+
+export class EchoAlly {
+    constructor() {
+        this.x = canvas.width / 2;
+        this.y = canvas.height - 100; // Start higher
+        this.size = 15;
+        this.floatTimer = 0; // For sine wave animation
+        this.isStunned = false;
+        this.stunTimer = 0;
+    }
+
+    draw(game) {
+        if (!game.player || game.player.isDestroyed) return;
+
+        ctx.save();
+        ctx.globalAlpha = 0.4; // Ghostly transparent
+        if (this.isStunned) {
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = '#555'; // Grey when stunned
+        } else {
+            // Use player's rotation logic for the ghost
+            if (game && game.isAimUnlocked && game.mousePos) {
+                 const angle = Math.atan2(game.mousePos.y - this.y, game.mousePos.x - this.x);
+                 ctx.translate(this.x, this.y);
+                 ctx.rotate(angle + Math.PI / 2);
+                 ctx.translate(-this.x, -this.y);
+            }
+            ctx.fillStyle = '#00ffff'; // Cyan Ghost
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y + this.size * 2.2);
+        ctx.lineTo(this.x - this.size * 0.6, this.y + this.size * 1.8);
+        ctx.lineTo(this.x + this.size * 0.6, this.y + this.size * 1.8);
+        ctx.closePath();
+        ctx.fill();
+
+        if (!this.isStunned) ctx.fillStyle = '#aaddff';
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(this.x - this.size, this.y + this.size * 2);
+        ctx.lineTo(this.x, this.y + this.size * 1.5);
+        ctx.lineTo(this.x + this.size, this.y + this.size * 2);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+    }
+
+    update(game, dt) {
+        if (this.isStunned) {
+             this.stunTimer -= dt;
+             if (this.stunTimer <= 0) this.isStunned = false;
+        }
+
+        if (game.player && !game.player.isDestroyed) {
+            this.floatTimer += dt;
+            
+            // GHOSTLY DRIFT LOGIC
+            // Side to side movement (30px wide sine wave)
+            const floatX = Math.sin(this.floatTimer * 2) * 30; 
+            // Slight up and down hover (10px height)
+            const floatY = Math.sin(this.floatTimer * 4) * 10; 
+
+            // Target is ABOVE player now (-60px)
+            const targetX = game.player.x + floatX;
+            const targetY = game.player.y - 60 + floatY; 
+            
+            // Smoothly move towards target (Lower lerp factor = more drift/delay)
+            this.x += (targetX - this.x) * 3 * dt;
+            this.y += (targetY - this.y) * 3 * dt;
+        }
+    }
+}
+
+export class VampAlly {
+    constructor() {
+        this.size = 15;
+        this.x = canvas.width / 2;
+        this.y = canvas.height - 70;
+        this.floatTimer = 0;
+        this.damage = 1;
+        this.isFiring = false;
+        this.beamTarget = null;
+        this.isRetreating = false;
+    }
+
+    draw(game) {
+        if (!game.player || game.player.isDestroyed || this.isRetreating) return;
+
+        ctx.save();
+        // Visuals: Crimson red drone
+        ctx.fillStyle = '#dc143c'; // Crimson
+        
+        // Hover effect
+        const yOffset = Math.sin(this.floatTimer * 3) * 5;
+        const xOffset = Math.cos(this.floatTimer * 2) * 30;
+        
+        const drawX = game.player.x + xOffset - 40; // Left side of player
+        const drawY = game.player.y - 40 + yOffset;
+        
+        this.x = drawX;
+        this.y = drawY;
+
+        ctx.translate(drawX, drawY);
+        
+        // Drone Body
+        ctx.beginPath();
+        ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Eye
+        ctx.fillStyle = '#ff0000';
+        ctx.shadowColor = 'red';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(0, 0, this.size * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        ctx.restore();
+
+        // Beam
+        if (this.isFiring && this.beamTarget) {
+            ctx.save();
+            ctx.strokeStyle = `rgba(220, 20, 60, ${0.5 + Math.sin(Date.now() / 50) * 0.5})`;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(this.x, this.y);
+            ctx.lineTo(this.beamTarget.x, this.beamTarget.y);
+            ctx.stroke();
+
+            // Siphon particles moving back
+            const dist = Math.hypot(this.beamTarget.x - this.x, this.beamTarget.y - this.y);
+            const particleCount = 3;
+            for (let i = 0; i < particleCount; i++) {
+                const t = ((Date.now() / 500) + (i / particleCount)) % 1;
+                const px = this.beamTarget.x + (this.x - this.beamTarget.x) * t;
+                const py = this.beamTarget.y + (this.y - this.beamTarget.y) * t;
+                ctx.fillStyle = '#00ff00'; // Green healing energy
+                ctx.beginPath();
+                ctx.arc(px, py, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+    }
+
+    update(game, dt) {
+        if (this.isRetreating) return;
+        
+        this.floatTimer += dt;
+
+        // Auto Attack Logic
+        // Target closest enemy
+        let bestTarget = null;
+        let minDistance = 300; // Range
+
+        for (const asteroid of game.asteroids) {
+             const dist = Math.hypot(this.x - asteroid.x, this.y - asteroid.y);
+             if (dist < minDistance) {
+                 minDistance = dist;
+                 bestTarget = asteroid;
+             }
+        }
+
+        if (bestTarget) {
+            this.isFiring = true;
+            this.beamTarget = bestTarget;
+            // Siphon Damage (Low but constant)
+            bestTarget.health -= this.damage * 10 * dt; 
+        } else {
+            this.isFiring = false;
+            this.beamTarget = null;
+        }
+    }
+}
+
+export class Coolant {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.size = 10;
+        this.vy = 2;
+        this.color = '#00ffff'; // Cyan
+    }
+
+    draw() {
+        ctx.save();
+        ctx.fillStyle = this.color;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Inner detail
+        ctx.fillStyle = '#fff';
+        ctx.font = '10px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText("❄", this.x, this.y + 4);
+        
+        ctx.restore();
+    }
+
+    update(dt) {
+        this.y += this.vy * 60 * dt;
+    }
+}
+
+export class StaticMine {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.size = 8;
+        this.timer = 0;
+    }
+    
+    draw() {
+        ctx.save();
+        ctx.fillStyle = 'red';
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = 'red';
+        const scale = 1 + Math.sin(this.timer) * 0.3;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+    
+    update(dt) {
+        this.timer += 5 * dt;
+    }
+}
+
+export class BehemothBomb {
+    constructor(x, y, targetX, targetY) {
+        this.x = x;
+        this.y = y;
+        this.targetX = targetX;
+        this.targetY = targetY;
+        this.size = 20;
+        this.speed = 1.5;
+        this.color = '#ff4500';
+        this.isExploding = false;
+        this.explosionRadius = 150;
+        this.explodeTimer = 0;
+    }
+
+    draw() {
+        if (this.isExploding) {
+            ctx.save();
+            ctx.fillStyle = `rgba(255, 69, 0, ${0.5 + Math.sin(Date.now() / 50) * 0.5})`;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.explosionRadius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        } else {
+            ctx.save();
+            ctx.fillStyle = this.color;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = 'red';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fill();
+            // Pulse center
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size * 0.5 * (1 + Math.sin(Date.now() / 100) * 0.3), 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+
+    update(game, dt) {
+        if (this.isExploding) {
+            this.explodeTimer -= dt;
+            if (this.explodeTimer <= 0) return true; // Signal to remove
+
+            // Damage check (simple: if player in radius)
+            const dist = Math.hypot(game.player.x - this.x, game.player.y - this.y);
+            if (dist < this.explosionRadius && !game.player.isDestroyed) {
+                // Break shields instantly or kill
+                if (game.player.shieldCharges > 0) {
+                    game.player.shieldCharges = 0;
+                    game.updateGameStatus("SHIELD BROKEN BY BOMB!");
+                    game.screenShakeDuration = 20;
+                } else {
+                    game.handleGameOver("Obliterated by Behemoth Bomb!");
+                }
+            }
+            return false;
+        }
+
+        const dx = this.targetX - this.x;
+        const dy = this.targetY - this.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist < 5) {
+            this.isExploding = true;
+            this.explodeTimer = 1; // Lasts 1s
+            game.screenShakeDuration = 10;
+            audioManager.playSound('finalbossExplosion');
+        } else {
+            this.x += (dx / dist) * this.speed * 60 * dt;
+            this.y += (dy / dist) * this.speed * 60 * dt;
+        }
+        return false;
     }
 }
 
