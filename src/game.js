@@ -1,5 +1,5 @@
 import * as UI from './ui.js';
-import { Player, Projectile, AIAlly, LaserAlly, EchoAlly, Coolant, Asteroid, FinalBoss, Particle, StaticMine, BehemothTurret, BehemothBomb } from './classes.js';
+import { Player, Projectile, AIAlly, LaserAlly, EchoAlly, VampAlly, Coolant, Asteroid, GhostAsteroid, FinalBoss, Particle, StaticMine, BehemothTurret, BehemothBomb, Monolith, MiniBehemoth } from './classes.js';
 import { audioManager } from './audio.js';
 
 export class Game {
@@ -27,6 +27,7 @@ export class Game {
         this.laserAlly = null;
         this.echoAlly = null; // REPLACED PRISM WITH ECHO
         this.echoAlly2 = null; // PERMANENT ECHO SKILL
+        this.vampAlly = null; // REWARD FOR BEHEMOTH
         this.finalBoss = null;
         this.isBossActive = false;
         this.isFinalBossActive = false;
@@ -53,6 +54,17 @@ export class Game {
         };
         this.selectedSkill = null; // 'noHeatMode', 'permanentEcho', 'ultimateBarrage'
         this.behemothSpawned = false;
+
+        // VOID BARRIER & OVERLOAD
+        this.voidBarrierHealth = 100;
+        this.maxVoidBarrierHealth = 100;
+        this.playerPositions = []; // For Overload check
+        this.overloadTimer = 0;
+
+        // DARKNESS EVENT
+        this.darknessTimer = 0;
+        this.isDarknessActive = false;
+        this.nextDarknessCheck = 30; // Check every 30s
     }
 
     start() {
@@ -97,6 +109,7 @@ export class Game {
         this.laserAlly = null;
         this.echoAlly = null;
         this.echoAlly2 = null;
+        this.vampAlly = null;
         this.upgradePoints = 0;
         this.allyUpgrades = {
             fireRateLevel: 0,
@@ -120,9 +133,18 @@ export class Game {
         this.selectedSkill = null;
         this.behemothSpawned = false;
 
+        this.voidBarrierHealth = 100;
+        this.playerPositions = [];
+        this.overloadTimer = 0;
+        
+        this.darknessTimer = 0;
+        this.isDarknessActive = false;
+        this.nextDarknessCheck = 30;
+
         this.updateHUD();
         this.updateGameStatus('Ready', false);
         UI.finalBossHealthContainer.style.display = 'none';
+        UI.voidBarrierContainer.style.display = 'none'; // Hide barrier initially
         UI.heatGroup.style.display = 'none'; // Hide heat bar initially
         UI.timerLabel.innerText = "⏱️"; // Reset timer label
     }
@@ -149,6 +171,38 @@ export class Game {
             this.handleSpawning();
         }
 
+        // VOID BARRIER CHECK (Void Mode Only)
+        if (this.finalBossDefeated && !this.isGameOver) {
+            UI.voidBarrierContainer.style.display = 'block';
+            
+            // Overload Check
+            this.handleOverload(dt);
+
+            // Darkness Event Check
+            const vTime = this.getVoidTime();
+            if (vTime >= this.nextDarknessCheck) {
+                 this.nextDarknessCheck += 30;
+                 if (Math.random() < 0.5) { // 50% chance
+                      this.isDarknessActive = true;
+                      this.darknessTimer = 15; // 15s duration
+                      this.updateGameStatus("🌑 THE DARKNESS HAS FALLEN 🌑", false);
+                      audioManager.playSound('finalbossWarning'); // Scary sound
+                 }
+            }
+
+            if (this.isDarknessActive) {
+                 this.darknessTimer -= dt;
+                 if (this.darknessTimer <= 0) {
+                      this.isDarknessActive = false;
+                      this.updateGameStatus("Light Returns...");
+                 }
+            }
+
+        } else {
+            UI.voidBarrierContainer.style.display = 'none';
+            this.isDarknessActive = false;
+        }
+
         // Update Game Objects
         this.player.update(this, dt);
         this.player.draw(this);
@@ -156,6 +210,7 @@ export class Game {
         if (this.laserAlly) this.laserAlly.update(this, dt);
         if (this.echoAlly) this.echoAlly.update(this, dt);
         if (this.echoAlly2) this.echoAlly2.update(this, dt);
+        if (this.vampAlly) this.vampAlly.update(this, dt);
 
         this.coolants.forEach((c, i) => {
              c.update(dt);
@@ -224,10 +279,39 @@ export class Game {
         for (let i = this.asteroids.length - 1; i >= 0; i--) {
             const a = this.asteroids[i];
             a.update(this, dt);
+            
+            // Boundary Check
             if (a.y > UI.canvas.height + a.size) {
                 // ORBITER FIX: Don't kill orbiter if it's orbiting (it might dip below screen)
                 if (a.type === 'orbiter' && a.isOrbiting) {
                     continue;
+                }
+
+                // VOID BARRIER DAMAGE
+                if (this.finalBossDefeated) {
+                     let damage = 1;
+                     if (['tanker', 'bulwark', 'sizzler', 'behemoth', 'boss'].includes(a.type) || a.isBoss || a.isElite) {
+                         damage = 5;
+                     }
+                     if (a.isElite && damage < 5) damage = 5; // Elite always deals heavy damage? Spec says "Elite Variants... If lọt qua đáy màn hình, gây x2 Sát thương lên Barrier". Wait, x2 of what? 
+                     // Spec says: "Quái nhỏ/Asteroid: -1 HP. Quái to (Tanker, Elite): -5 HP."
+                     // And "Elite Variants... Nếu lọt qua đáy màn hình, gây x2 Sát thương lên Barrier." -> So Elite Small = 2 HP, Elite Big = 10 HP?
+                     // Or does it mean Elite are "Quái to" so they deal 5HP, but wait, if it's an Elite Asteroid, it's small?
+                     // Let's interpret: 
+                     // Standard damage: Small=1, Big=5.
+                     // Elite multiplier: x2.
+                     
+                     if (['tanker', 'bulwark', 'sizzler', 'behemoth', 'boss'].includes(a.type) || a.isBoss) {
+                         damage = 5;
+                     }
+                     
+                     if (a.isElite) damage *= 2;
+
+                     this.takeBarrierDamage(damage);
+                     
+                     // Visual feedback for barrier hit
+                     this.createExplosion(a.x, UI.canvas.height, '#ff0000', 10);
+                     audioManager.playSound('playerHit', 0.5); // Re-use hit sound
                 }
 
                 if (a.isBoss && a !== this.finalBoss && a.type !== 'behemoth') {
@@ -274,6 +358,7 @@ export class Game {
         if (this.laserAlly) this.laserAlly.draw();
         if (this.echoAlly) this.echoAlly.draw(this);
         if (this.echoAlly2) this.echoAlly2.draw(this);
+        if (this.vampAlly) this.vampAlly.draw(this);
         
         this.coolants.forEach(c => c.draw());
 
@@ -298,6 +383,45 @@ export class Game {
             UI.ctx.fillRect(-UI.canvas.width, -UI.canvas.height, UI.canvas.width * 2, UI.canvas.height * 2);
             this.flashDuration--;
         }
+
+        // DARKNESS OVERLAY
+        if (this.isDarknessActive) {
+             // Create a temporary canvas for the mask
+             // Or simpler: Fill black, use composite operation 'destination-out' to cut holes
+             UI.ctx.save();
+             UI.ctx.fillStyle = 'black';
+             UI.ctx.globalAlpha = 0.95;
+             UI.ctx.fillRect(-UI.canvas.width, -UI.canvas.height, UI.canvas.width * 2, UI.canvas.height * 2);
+             
+             UI.ctx.globalCompositeOperation = 'destination-out';
+             
+             // Cut hole for Player
+             const drawLight = (x, y, r) => {
+                 const grad = UI.ctx.createRadialGradient(x, y, 0, x, y, r);
+                 grad.addColorStop(0, 'rgba(0,0,0,1)');
+                 grad.addColorStop(1, 'rgba(0,0,0,0)');
+                 UI.ctx.fillStyle = grad;
+                 UI.ctx.beginPath();
+                 UI.ctx.arc(x, y, r, 0, Math.PI * 2);
+                 UI.ctx.fill();
+             };
+
+             if (this.player && !this.player.isDestroyed) {
+                 drawLight(this.player.x, this.player.y, 150);
+             }
+             
+             this.player.allies.forEach(a => drawLight(a.x, a.y, 100));
+             if (this.laserAlly) drawLight(this.laserAlly.x, this.laserAlly.y, 100);
+             if (this.echoAlly) drawLight(this.echoAlly.x, this.echoAlly.y, 100);
+             if (this.echoAlly2) drawLight(this.echoAlly2.x, this.echoAlly2.y, 100);
+             if (this.vampAlly) drawLight(this.vampAlly.x, this.vampAlly.y, 80);
+
+             // Projectiles glow in dark
+             this.projectiles.forEach(p => drawLight(p.x, p.y, 40));
+
+             UI.ctx.restore();
+        }
+
         UI.ctx.restore();
 
         if (this.isFinalBossActive && this.finalBoss) {
@@ -311,7 +435,39 @@ export class Game {
             
             const enemyType = this.getSpawnType();
             if (enemyType) {
-                 this.asteroids.push(new Asteroid(this, { type: enemyType }));
+                 // Void Mode Logic for Elite & Linked Enemies
+                 let isElite = false;
+                 let isLinked = false;
+                 
+                 if (this.finalBossDefeated && this.getVoidTime() >= 150) {
+                     // Elite Chance (Low)
+                     if (Math.random() < 0.1) isElite = true;
+
+                     // Linked Chance (Low) - Only if not Elite
+                     if (!isElite && Math.random() < 0.1) isLinked = true;
+                 }
+
+                 if (isLinked) {
+                      // Spawn Pair
+                      const x1 = Math.random() * (UI.canvas.width / 2);
+                      const x2 = x1 + 100 + Math.random() * 100; // Separation
+                      
+                      const enemy1 = new Asteroid(this, { type: enemyType, x: x1, y: -50 });
+                      const enemy2 = new Asteroid(this, { type: enemyType, x: x2, y: -50 });
+                      
+                      enemy1.partner = enemy2;
+                      enemy2.partner = enemy1;
+                      
+                      this.asteroids.push(enemy1);
+                      this.asteroids.push(enemy2);
+                      this.updateGameStatus("LINKED ENEMIES SPAWNED!");
+                 } else if (this.isDarknessActive && Math.random() < 0.7) { 
+                      // High chance for Ghost during Darkness
+                      this.asteroids.push(new GhostAsteroid(this));
+                 } else {
+                      this.asteroids.push(new Asteroid(this, { type: enemyType, isElite: isElite }));
+                      if (isElite) this.updateGameStatus("ELITE ENEMY DETECTED!");
+                 }
             }
             this.lastSpawnTime = performance.now();
         }
@@ -338,13 +494,56 @@ export class Game {
              this.isBossActive = true;
         }
 
-        // Override for Behemoth: Allow spawning even if isBossActive, but slower
-        if (this.finalBossDefeated && this.behemothSpawned && this.isBossActive) {
+        // VOID MODE MONOLITH SPAWN (at 300s Void Time)
+        if (this.finalBossDefeated && this.getVoidTime() >= 300 && !this.isFinalBossActive && !this.finalBoss) {
+             // Re-using FinalBossActive flag for Monolith for HUD/Logic convenience
+             this.isFinalBossActive = true; 
+             this.isBossActive = false;
+             this.asteroids.forEach(a => {
+                 if (a.type !== 'monolith') this.createExplosion(a.x, a.y, a.color, a.size);
+             });
+             this.asteroids = []; // Clear screen
+             this.enemyProjectiles = [];
+             
+             this.finalBoss = new Monolith(this);
+             this.asteroids.push(this.finalBoss);
+             
+             UI.finalBossHealthContainer.style.display = 'block';
+             UI.finalBossHealthBar.style.width = '100%';
+             // Update Health Bar Color for Monolith
+             UI.finalBossHealthBar.style.background = 'purple';
+             
+             this.updateGameStatus('!!! MONOLITH DETECTED !!!');
+             this.screenShakeDuration = 120;
+             this.screenShakeIntensity = 4;
+             audioManager.playSound('finalbossBegin'); // Reuse sound
+        }
+
+        // Override for Behemoth/Monolith: Allow spawning even if isBossActive, but slower
+        if (this.finalBossDefeated && (this.behemothSpawned || (this.finalBoss instanceof Monolith))) {
              const voidSpawnInterval = 2000; // Slower spawn rate
              if (performance.now() - this.lastSpawnTime > voidSpawnInterval) {
                  const enemyType = this.getSpawnType();
                  if (enemyType) {
-                      this.asteroids.push(new Asteroid(this, { type: enemyType }));
+                      // Void Mode Logic for Elite & Linked Enemies (Copied here to ensure it runs during boss phases)
+                      let isElite = false;
+                      let isLinked = false;
+                      
+                      if (this.finalBossDefeated && this.getVoidTime() >= 150) {
+                          if (Math.random() < 0.1) isElite = true;
+                          if (!isElite && Math.random() < 0.1) isLinked = true;
+                      }
+
+                      if (isLinked) {
+                           const x1 = Math.random() * (UI.canvas.width / 2);
+                           const x2 = x1 + 100 + Math.random() * 100;
+                           const enemy1 = new Asteroid(this, { type: enemyType, x: x1, y: -50 });
+                           const enemy2 = new Asteroid(this, { type: enemyType, x: x2, y: -50 });
+                           enemy1.partner = enemy2; enemy2.partner = enemy1;
+                           this.asteroids.push(enemy1); this.asteroids.push(enemy2);
+                      } else {
+                           this.asteroids.push(new Asteroid(this, { type: enemyType, isElite: isElite }));
+                      }
                  }
                  this.lastSpawnTime = performance.now();
              }
@@ -556,16 +755,13 @@ export class Game {
 
                     // BULWARK SHIELD LOGIC
                     if (asteroid.type === 'bulwark') {
-                        // Better: If player is below bulwark (y > asteroid.y), shield blocks.
-                        // Flank = get above it.
                         if (this.player.y > asteroid.y) {
-                            this.createExplosion(this.projectiles[i].x, this.projectiles[i].y, '#00e5ff', 5); // Blue spark
+                            this.createExplosion(this.projectiles[i].x, this.projectiles[i].y, '#00e5ff', 5);
                             this.projectiles.splice(i, 1);
                             hitSomething = true;
                             break;
                         }
                     }
-
 
                     this.createExplosion(asteroid.x, asteroid.y, asteroid.color, 5);
 
@@ -574,7 +770,18 @@ export class Game {
                     // VOID MODE GLOBAL DAMAGE BUFF (x2) - STARTS AT 100s+
                     if (this.finalBossDefeated && this.getVoidTime() >= 100) damage *= 2;
 
-                    asteroid.health -= damage;
+                    // MONOLITH CUSTOM DAMAGE LOGIC
+                    if (asteroid instanceof Monolith) {
+                        const actualDamage = asteroid.takeDamage(damage, this.projectiles[i].source, this.projectiles[i].x, this.projectiles[i].y);
+                        // Visual feedback for immunity/resist
+                        if (actualDamage === 0) {
+                             this.createExplosion(this.projectiles[i].x, this.projectiles[i].y, '#888', 5);
+                        } else if (actualDamage < damage) {
+                             this.createExplosion(this.projectiles[i].x, this.projectiles[i].y, '#purple', 5); // Resisted color
+                        }
+                    } else {
+                        asteroid.health -= damage;
+                    }
 
                     // ANCHOR PROTECTION LOGIC
                     if (asteroid.protectedBy && asteroid.health <= 1) {
@@ -646,6 +853,23 @@ export class Game {
                  }
             }
 
+            // BEHEMOTH REWARD: Vamp Ally
+            if (asteroid.type === 'behemoth') {
+                 this.vampAlly = new VampAlly();
+                 this.updateGameStatus("VAMP ALLY ACQUIRED! BARRIER HEALING ONLINE.");
+                 audioManager.playSound('AIupgraded');
+            }
+
+            // VAMP ALLY PASSIVE (Heal Barrier)
+            if (this.vampAlly && Math.random() < 0.20) {
+                 if (this.voidBarrierHealth < this.maxVoidBarrierHealth) {
+                      this.voidBarrierHealth = Math.min(this.maxVoidBarrierHealth, this.voidBarrierHealth + 1);
+                      // Visual Feedback
+                      UI.voidBarrierBar.style.boxShadow = `0 0 20px #00ff00`;
+                      setTimeout(() => UI.voidBarrierBar.style.boxShadow = '', 200);
+                 }
+            }
+
             // Drop Coolant (10% chance from Void Enemies)
             if (['orbiter', 'weaver', 'bulwark'].includes(asteroid.type) && Math.random() < 0.1) {
                 this.coolants.push(new Coolant(asteroid.x, asteroid.y));
@@ -679,6 +903,7 @@ export class Game {
         this.player.isDestroyed = true;
         this.player.allies.forEach(ally => ally.isRetreating = true);
         if (this.laserAlly) this.laserAlly.isRetreating = true;
+        if (this.vampAlly) this.vampAlly.isRetreating = true;
 
         this.screenShakeDuration = 30;
         this.screenShakeIntensity = 10;
@@ -758,6 +983,59 @@ export class Game {
             } else {
                 UI.overheatText.style.display = 'none';
                 UI.heatBar.style.backgroundColor = ''; // Reset to gradient
+            }
+        }
+
+        // Update Void Barrier
+        if (this.finalBossDefeated) {
+            const barrierPercent = (this.voidBarrierHealth / this.maxVoidBarrierHealth) * 100;
+            UI.voidBarrierBar.style.width = `${Math.max(0, barrierPercent)}%`;
+            if (this.voidBarrierHealth < 30) {
+                 UI.voidBarrierBar.style.boxShadow = `0 0 15px red`;
+                 UI.voidBarrierBar.style.background = `linear-gradient(90deg, red, #800000)`;
+            } else {
+                 UI.voidBarrierBar.style.boxShadow = `0 0 10px #00ffff`;
+                 UI.voidBarrierBar.style.background = `linear-gradient(90deg, #00ffff, #0088ff)`;
+            }
+        }
+    }
+
+    takeBarrierDamage(amount) {
+        this.voidBarrierHealth -= amount;
+        this.screenShakeDuration = 5;
+        if (this.voidBarrierHealth <= 0) {
+            this.voidBarrierHealth = 0;
+            this.handleGameOver("Void Barrier Destroyed! Base Overrun.");
+        }
+    }
+
+    handleOverload(dt) {
+        if (!this.player || this.isPaused || this.isGameOver) return;
+
+        // Track position
+        this.playerPositions.push({ x: this.player.x, y: this.player.y, time: this.gameTime });
+        
+        // Remove old positions (> 3s ago)
+        const cutoff = this.gameTime - 3; // 3 seconds threshold
+        this.playerPositions = this.playerPositions.filter(p => p.time >= cutoff);
+
+        // Check if moved enough
+        if (this.playerPositions.length > 0) {
+            const first = this.playerPositions[0];
+            const last = this.playerPositions[this.playerPositions.length - 1];
+            const dist = Math.hypot(last.x - first.x, last.y - first.y);
+
+            // If stayed within small radius for 3s
+            if (dist < 50 && this.playerPositions.length > 60) { // Enough samples
+                 this.overloadTimer += dt;
+                 if (this.overloadTimer > 0.5) { // Warning buffer
+                      if (!this.player.isOverheated && !this.isNoHeatMode) {
+                           this.player.heat += 50 * dt; // Rapid heat
+                           this.updateGameStatus("⚠️ MOVE! OVERLOAD DETECTED! ⚠️", false);
+                      }
+                 }
+            } else {
+                this.overloadTimer = 0;
             }
         }
     }
@@ -848,7 +1126,8 @@ export class Game {
                 vx, vy,
                 size: 8,
                 damage: 50,
-                color: '#ff00ff'
+                color: '#ff00ff',
+                source: 'ultimate'
             }));
         }
 
@@ -863,7 +1142,11 @@ export class Game {
                  a.health = 0;
                  this.handleAsteroidDestruction(a, i);
             } else {
-                a.health -= 500; // Big damage to bosses
+                if (a instanceof Monolith) {
+                     a.takeDamage(500, 'ultimate'); // Monolith absorbs/resists logic inside takeDamage
+                } else {
+                     a.health -= 500; // Big damage to normal bosses
+                }
                 this.createExplosion(a.x, a.y, a.color, 50);
             }
         }

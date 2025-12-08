@@ -46,7 +46,8 @@ export const skillNoHeatBtn = document.getElementById('skill-no-heat');
 export const skillPermanentEchoBtn = document.getElementById('skill-permanent-echo');
 export const skillUltimateBarrageBtn = document.getElementById('skill-ultimate-barrage');
 export const hudSkillButton = document.getElementById('hud-skill-button'); // New HUD Button
-
+export const voidBarrierContainer = document.getElementById('void-barrier-container');
+export const voidBarrierBar = document.getElementById('void-barrier-bar');
 
 export function showMessage(title, text) {
     gameStatus.innerText = title;
