@@ -184,12 +184,15 @@ export class Game {
             const vTime = this.getVoidTime();
             if (vTime >= this.nextDarknessCheck) {
                  this.nextDarknessCheck += 30;
-                 if (Math.random() < 0.15) { // 15% chance
-                      this.isDarknessActive = true;
-                      this.darknessTimer = 15; // 15s duration
-                      this.updateGameStatus("🌑 THE DARKNESS HAS FALLEN 🌑", false);
-                      audioManager.playSound('finalbossWarning'); // Scary sound
-                 }
+                  // Don't trigger Darkness while fighting the Monolith
+                  if (!(this.isFinalBossActive && this.finalBoss instanceof Monolith)) {
+                     if (Math.random() < 0.15) { // 15% chance
+                         this.isDarknessActive = true;
+                         this.darknessTimer = 10; // 10s duration
+                         this.updateGameStatus("🌑 THE DARKNESS HAS FALLEN 🌑", false);
+                         audioManager.playSound('finalbossWarning'); // Scary sound
+                     }
+                  }
             }
 
             if (this.isDarknessActive) {
@@ -531,35 +534,41 @@ export class Game {
              audioManager.playSound('finalbossBegin'); // Reuse sound
         }
 
-        // Override for Behemoth/Monolith: Allow spawning even if isBossActive, but slower
-        if (this.finalBossDefeated && (this.behemothSpawned || (this.finalBoss instanceof Monolith))) {
-             const voidSpawnInterval = 2000; // Slower spawn rate
-             if (performance.now() - this.lastSpawnTime > voidSpawnInterval) {
-                 const enemyType = this.getSpawnType();
-                 if (enemyType) {
-                      // Void Mode Logic for Elite & Linked Enemies (Requires Behemoth Defeated)
-                      let isElite = false;
-                      let isLinked = false;
-                      
-                      if (this.behemothDefeated) {
-                          if (Math.random() < 0.1) isElite = true;
-                          if (!isElite && Math.random() < 0.1) isLinked = true;
-                      }
+           // Override for Behemoth/Monolith: Allow spawning even if isBossActive, but slower
+           if (this.finalBossDefeated && (this.behemothSpawned || (this.finalBoss instanceof Monolith))) {
+               // If the Monolith is currently active, avoid spawning generic small enemies
+               if (this.finalBoss instanceof Monolith) {
+                  // Keep throttle so we don't repeatedly attempt spawning
+                  this.lastSpawnTime = performance.now();
+               } else {
+                  const voidSpawnInterval = 2000; // Slower spawn rate
+                  if (performance.now() - this.lastSpawnTime > voidSpawnInterval) {
+                     const enemyType = this.getSpawnType();
+                     if (enemyType) {
+                         // Void Mode Logic for Elite & Linked Enemies (Requires Behemoth Defeated)
+                         let isElite = false;
+                         let isLinked = false;
+                          
+                         if (this.behemothDefeated) {
+                            if (Math.random() < 0.1) isElite = true;
+                            if (!isElite && Math.random() < 0.1) isLinked = true;
+                         }
 
-                      if (isLinked) {
-                           const x1 = Math.random() * (UI.canvas.width / 2);
-                           const x2 = x1 + 100 + Math.random() * 100;
-                           const enemy1 = new Asteroid(this, { type: enemyType, x: x1, y: -50 });
-                           const enemy2 = new Asteroid(this, { type: enemyType, x: x2, y: -50 });
-                           enemy1.partner = enemy2; enemy2.partner = enemy1;
-                           this.asteroids.push(enemy1); this.asteroids.push(enemy2);
-                      } else {
-                           this.asteroids.push(new Asteroid(this, { type: enemyType, isElite: isElite }));
-                      }
-                 }
-                 this.lastSpawnTime = performance.now();
-             }
-        }
+                         if (isLinked) {
+                             const x1 = Math.random() * (UI.canvas.width / 2);
+                             const x2 = x1 + 100 + Math.random() * 100;
+                             const enemy1 = new Asteroid(this, { type: enemyType, x: x1, y: -50 });
+                             const enemy2 = new Asteroid(this, { type: enemyType, x: x2, y: -50 });
+                             enemy1.partner = enemy2; enemy2.partner = enemy1;
+                             this.asteroids.push(enemy1); this.asteroids.push(enemy2);
+                         } else {
+                             this.asteroids.push(new Asteroid(this, { type: enemyType, isElite: isElite }));
+                         }
+                     }
+                     this.lastSpawnTime = performance.now();
+                  }
+               }
+           }
     }
 
     getSpawnType() {

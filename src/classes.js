@@ -824,8 +824,8 @@ export class MiniBehemoth extends BehemothTurret {
         this.x = x;
         this.y = y;
         this.size = 40; // Smaller
-        this.health = 500;
-        this.maxHealth = 500;
+        this.health = 800; // Buffed a bit
+        this.maxHealth = 800;
         this.isBoss = false; // Not a boss boss, just a summon
         this.type = 'mini_behemoth';
         this.phase = 'attack';
@@ -944,7 +944,6 @@ export class Monolith extends Asteroid {
                 this.state = 'idle';
                 this.stateTimer = 2;
                 // Respawn nodes if all dead? Or just recover?
-                // Logic says: "Bắn nổ các điểm này... Boss bị Stun". 
                 // Suggests nodes might regenerate or it's a one-time weakness phase. 
                 // Let's regenerate them with lower HP to keep mechanic active.
                 if (this.coolingNodes.every(n => !n.active)) {
@@ -1007,7 +1006,23 @@ export class Monolith extends Asteroid {
         } else if (rand < 0.7) {
             // Mini Behemoth
             game.updateGameStatus("Mini-Behemoth Deployed!");
-            game.asteroids.push(new MiniBehemoth(game, Math.random() * (canvas.width - 100) + 50, 200));
+            // Ensure Mini-Behemoth does not spawn overlapping the Monolith itself
+            const margin = 50; // safety margin from Monolith edges
+            const leftBound = this.x - this.size / 2 - margin;
+            const rightBound = this.x + this.size / 2 + margin;
+            // pick a safe x that is outside the monolith horizontal bounds
+            let spawnX = Math.random() * (canvas.width - 100) + 50;
+            let attempts = 0;
+            while (spawnX > leftBound && spawnX < rightBound && attempts < 10) {
+                spawnX = Math.random() * (canvas.width - 100) + 50;
+                attempts++;
+            }
+            // if still inside after attempts, push it to nearest side
+            if (spawnX > leftBound && spawnX < rightBound) {
+                if (spawnX < this.x) spawnX = Math.max(50, leftBound - margin);
+                else spawnX = Math.min(canvas.width - 50, rightBound + margin);
+            }
+            game.asteroids.push(new MiniBehemoth(game, spawnX, 200));
         } else {
             // Gravity Press
             game.updateGameStatus("GRAVITY PRESS! BREAK THE NODES!");
