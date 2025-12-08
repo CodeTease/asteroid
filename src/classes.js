@@ -944,7 +944,6 @@ export class Monolith extends Asteroid {
                 this.state = 'idle';
                 this.stateTimer = 2;
                 // Respawn nodes if all dead? Or just recover?
-                // Logic says: "Bắn nổ các điểm này... Boss bị Stun". 
                 // Suggests nodes might regenerate or it's a one-time weakness phase. 
                 // Let's regenerate them with lower HP to keep mechanic active.
                 if (this.coolingNodes.every(n => !n.active)) {
