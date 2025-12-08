@@ -184,7 +184,7 @@ export class Game {
             const vTime = this.getVoidTime();
             if (vTime >= this.nextDarknessCheck) {
                  this.nextDarknessCheck += 30;
-                 if (Math.random() < 0.5) { // 50% chance
+                 if (Math.random() < 0.15) { // 15% chance
                       this.isDarknessActive = true;
                       this.darknessTimer = 15; // 15s duration
                       this.updateGameStatus("🌑 THE DARKNESS HAS FALLEN 🌑", false);
