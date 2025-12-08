@@ -856,19 +856,19 @@ export class MiniBehemoth extends BehemothTurret {
 export class Monolith extends Asteroid {
     constructor(game) {
         super(game, { isBoss: true });
-        this.size = 250;
+        this.size = 150;
         this.x = canvas.width / 2;
         this.y = -200;
         this.initialY = 150;
-        this.health = 20000;
-        this.maxHealth = 20000;
+        this.health = 3000;
+        this.maxHealth = 3000;
         this.color = '#000000'; // Vantablack
         this.type = 'monolith';
         
         this.coolingNodes = [
-            { x: -85, y: 85, hp: 300, active: true },
-            { x: 85, y: 85, hp: 300, active: true },
-            { x: 0, y: 170, hp: 300, active: true }
+            { x: -50, y: 50, hp: 300, active: true },
+            { x: 50, y: 50, hp: 300, active: true },
+            { x: 0, y: 100, hp: 300, active: true }
         ];
         
         this.state = 'enter'; // enter, idle, attack, stunned
