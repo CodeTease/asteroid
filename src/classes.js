@@ -265,9 +265,8 @@ export class Asteroid {
         }
 
         let healthMultiplier = game.gameTime >= 200 ? 2 : 1;
-        // VOID MODE EXTENDED BUFF (Global x1.5 HP for ALL enemies after 150s Void Time)
-        // Actually, Design Doc says: "Global Buff: Toàn bộ kẻ thù nhận x1.5 HP vĩnh viễn" (After Behemoth/150s)
-        if (game.finalBossDefeated && game.getVoidTime() >= 150) {
+        // VOID MODE EXTENDED BUFF (Global x1.5 HP for ALL enemies after Behemoth Defeated)
+        if (game.behemothDefeated) {
             healthMultiplier *= 1.5;
         }
 
@@ -1598,8 +1597,8 @@ export class LaserAlly extends Player {
                 let damageMultiplier = 1;
                 if (bestTarget.type === 'tanker') damageMultiplier = 0.5;
 
-                // Void Mode Global Buff: x2 Damage (Starts at 100s+)
-                if (game.finalBossDefeated && game.gameTime >= 100) damageMultiplier *= 2;
+                // Void Mode Global Buff: x2 Damage (Starts at 100s+ Void Time - Standard Void Mode, unrelated to Behemoth defeat)
+                if (game.finalBossDefeated && game.getVoidTime() >= 100) damageMultiplier *= 2;
 
                 bestTarget.health -= this.laserDamage * dt * damageMultiplier;
             } else {

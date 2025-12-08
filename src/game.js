@@ -54,6 +54,7 @@ export class Game {
         };
         this.selectedSkill = null; // 'noHeatMode', 'permanentEcho', 'ultimateBarrage'
         this.behemothSpawned = false;
+        this.behemothDefeated = false;
 
         // VOID BARRIER & OVERLOAD
         this.voidBarrierHealth = 100;
@@ -132,6 +133,7 @@ export class Game {
         };
         this.selectedSkill = null;
         this.behemothSpawned = false;
+        this.behemothDefeated = false;
 
         this.voidBarrierHealth = 100;
         this.playerPositions = [];
@@ -171,8 +173,8 @@ export class Game {
             this.handleSpawning();
         }
 
-        // VOID BARRIER CHECK (Void Mode Only)
-        if (this.finalBossDefeated && !this.isGameOver) {
+        // VOID BARRIER CHECK (Only active AFTER Behemoth is defeated)
+        if (this.behemothDefeated && !this.isGameOver) {
             UI.voidBarrierContainer.style.display = 'block';
             
             // Overload Check
@@ -217,7 +219,7 @@ export class Game {
              if (c.y > UI.canvas.height) this.coolants.splice(i, 1);
         });
 
-        // VOID SKILL UPDATES & UI COOLDOWN
+        // VOID SKILL UPDATES & UI COOLDOWN (Triggered at 100s, unrelated to Behemoth)
         let skillText = null;
         if (this.selectedSkill) {
             const skill = this.voidSkills[this.selectedSkill];
@@ -287,25 +289,35 @@ export class Game {
                     continue;
                 }
 
-                // VOID BARRIER DAMAGE
-                if (this.finalBossDefeated) {
+                // VOID BARRIER DAMAGE (Only active AFTER Behemoth is defeated)
+                if (this.behemothDefeated) {
                      let damage = 1;
-                     if (['tanker', 'bulwark', 'sizzler', 'behemoth', 'boss'].includes(a.type) || a.isBoss || a.isElite) {
-                         damage = 5;
-                     }
-                     if (a.isElite && damage < 5) damage = 5; // Elite always deals heavy damage? Spec says "Elite Variants... If lọt qua đáy màn hình, gây x2 Sát thương lên Barrier". Wait, x2 of what? 
                      // Spec says: "Quái nhỏ/Asteroid: -1 HP. Quái to (Tanker, Elite): -5 HP."
-                     // And "Elite Variants... Nếu lọt qua đáy màn hình, gây x2 Sát thương lên Barrier." -> So Elite Small = 2 HP, Elite Big = 10 HP?
-                     // Or does it mean Elite are "Quái to" so they deal 5HP, but wait, if it's an Elite Asteroid, it's small?
-                     // Let's interpret: 
-                     // Standard damage: Small=1, Big=5.
-                     // Elite multiplier: x2.
                      
                      if (['tanker', 'bulwark', 'sizzler', 'behemoth', 'boss'].includes(a.type) || a.isBoss) {
                          damage = 5;
                      }
                      
-                     if (a.isElite) damage *= 2;
+                     if (a.isElite) {
+                         // Design says "Quái to (Tanker, Elite): -5 HP" BUT also "Elite Variants... gây x2 Sát thương lên Barrier"
+                         // This implies Elite Base Damage is high, or it doubles the base.
+                         // Let's interpret: Elite always deals significant damage. 
+                         // If it's a small elite, does it deal 1*2=2? Or 5?
+                         // "Quái to (Tanker, Elite): -5 HP" suggests Elite IS considered "Quái to".
+                         // "Effect: ... gây x2 Sát thương". 
+                         // So maybe Elite = 5 HP (base) * 2 = 10 HP? 
+                         // Or just 5HP? 
+                         // Let's go with: Base Damage (1 or 5) * 2 if Elite.
+                         // Actually "Quái to (Tanker, Elite): -5 HP" seems to define the base class.
+                         // And "Effect: ... gây x2 Sát thương" might be redundant or stacking.
+                         // Let's implement: Big=5, Small=1. If Elite, multiply by 2.
+                         
+                         // Re-eval: If a small scout is Elite, is it "Quái to"? Probably.
+                         // Let's stick to: If Elite, it hits for 10 (5*2).
+                         damage = 10;
+                     } else if (['tanker', 'bulwark', 'sizzler', 'behemoth', 'boss'].includes(a.type) || a.isBoss) {
+                         damage = 5;
+                     }
 
                      this.takeBarrierDamage(damage);
                      
@@ -435,11 +447,11 @@ export class Game {
             
             const enemyType = this.getSpawnType();
             if (enemyType) {
-                 // Void Mode Logic for Elite & Linked Enemies
+                 // Void Mode Logic for Elite & Linked Enemies (Requires Behemoth Defeated)
                  let isElite = false;
                  let isLinked = false;
                  
-                 if (this.finalBossDefeated && this.getVoidTime() >= 150) {
+                 if (this.behemothDefeated) {
                      // Elite Chance (Low)
                      if (Math.random() < 0.1) isElite = true;
 
@@ -525,11 +537,11 @@ export class Game {
              if (performance.now() - this.lastSpawnTime > voidSpawnInterval) {
                  const enemyType = this.getSpawnType();
                  if (enemyType) {
-                      // Void Mode Logic for Elite & Linked Enemies (Copied here to ensure it runs during boss phases)
+                      // Void Mode Logic for Elite & Linked Enemies (Requires Behemoth Defeated)
                       let isElite = false;
                       let isLinked = false;
                       
-                      if (this.finalBossDefeated && this.getVoidTime() >= 150) {
+                      if (this.behemothDefeated) {
                           if (Math.random() < 0.1) isElite = true;
                           if (!isElite && Math.random() < 0.1) isLinked = true;
                       }
@@ -767,7 +779,7 @@ export class Game {
 
                     let damage = this.projectiles[i].damage;
 
-                    // VOID MODE GLOBAL DAMAGE BUFF (x2) - STARTS AT 100s+
+                    // VOID MODE GLOBAL DAMAGE BUFF (x2) - STARTS AT 100s+ (As per original Void Mode design)
                     if (this.finalBossDefeated && this.getVoidTime() >= 100) damage *= 2;
 
                     // MONOLITH CUSTOM DAMAGE LOGIC
@@ -853,11 +865,15 @@ export class Game {
                  }
             }
 
-            // BEHEMOTH REWARD: Vamp Ally
+            // BEHEMOTH REWARD: Vamp Ally & UNLOCK ABYSS
             if (asteroid.type === 'behemoth') {
+                 this.behemothDefeated = true; // UNLOCK VOID MODE EXTENDED
                  this.vampAlly = new VampAlly();
-                 this.updateGameStatus("VAMP ALLY ACQUIRED! BARRIER HEALING ONLINE.");
+                 this.updateGameStatus("BEHEMOTH DESTROYED! THE ABYSS OPENS...");
                  audioManager.playSound('AIupgraded');
+                 
+                 // Show Barrier Immediately
+                 UI.voidBarrierContainer.style.display = 'block';
             }
 
             // VAMP ALLY PASSIVE (Heal Barrier)
@@ -986,8 +1002,8 @@ export class Game {
             }
         }
 
-        // Update Void Barrier
-        if (this.finalBossDefeated) {
+        // Update Void Barrier (Only if unlocked)
+        if (this.behemothDefeated) {
             const barrierPercent = (this.voidBarrierHealth / this.maxVoidBarrierHealth) * 100;
             UI.voidBarrierBar.style.width = `${Math.max(0, barrierPercent)}%`;
             if (this.voidBarrierHealth < 30) {
