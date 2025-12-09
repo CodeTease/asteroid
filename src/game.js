@@ -1097,11 +1097,11 @@ export class Game {
                  }
             }
 
-            // BEHEMOTH REWARD: Vamp Ally & UNLOCK ABYSS
+            // BEHEMOTH REWARD: Vamp Ally & UNLOCK Extended
             if (asteroid.type === 'behemoth') {
                  this.behemothDefeated = true; // UNLOCK VOID MODE EXTENDED
                  this.vampAlly = new VampAlly();
-                 this.updateGameStatus("BEHEMOTH DESTROYED! THE ABYSS OPENS...");
+                 this.updateGameStatus("BEHEMOTH DESTROYED! THE EXTENDED OPENS...");
                  audioManager.playSound('AIupgraded');
                  
                  // Show Barrier Immediately
