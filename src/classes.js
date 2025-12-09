@@ -103,6 +103,22 @@ export class Player {
             if (this.x > canvas.width - this.size) this.x = canvas.width - this.size;
         }
 
+        // Field Inversion Logic
+        let leftKey = (game.keys['ArrowLeft'] || game.keys['a']);
+        let rightKey = (game.keys['ArrowRight'] || game.keys['d']);
+
+        if (game.isInputInverted) {
+            const temp = leftKey;
+            leftKey = rightKey;
+            rightKey = temp;
+            
+            // Visual cue for inversion? Maybe in Draw.
+        }
+        
+        // Override movement input
+        if (leftKey && this.x > this.size) this.x -= moveSpeed;
+        if (rightKey && this.x < canvas.width - this.size) this.x += moveSpeed;
+
         // Heat Decay
         if (!this.isOverheated && this.heat > 0) {
             // Check for Sizzler
@@ -1342,6 +1358,12 @@ export class AIAlly extends Player {
             return;
         }
 
+        // CONFUSION LOGIC
+        if (this.isConfused) {
+             this.confusedTimer -= dt;
+             if (this.confusedTimer <= 0) this.isConfused = false;
+        }
+
         if (this.isStunned) {
             this.stunTimer -= dt;
             if (this.stunTimer <= 0) this.isStunned = false;
@@ -1395,17 +1417,31 @@ export class AIAlly extends Player {
                     }
                 }
             }
-            if (bestTarget) {
+            if (this.isConfused) {
+                // Shoot Randomly
+                this.shootAt(game, null, true);
+            } else if (bestTarget) {
                 this.shootAt(game, bestTarget);
             }
             this.lastFireTime = Date.now();
         }
     }
-    shootAt(game, target) {
+    shootAt(game, target, isRandom = false) {
         audioManager.playSound('shoot', 0.2);
-        const dx = target.x - this.x;
-        const dy = target.y - this.y;
-        const dist = Math.hypot(dx, dy);
+        
+        let dx, dy, dist;
+        
+        if (isRandom) {
+             const angle = Math.random() * Math.PI * 2;
+             dx = Math.cos(angle);
+             dy = Math.sin(angle);
+             dist = 1;
+        } else {
+             dx = target.x - this.x;
+             dy = target.y - this.y;
+             dist = Math.hypot(dx, dy);
+        }
+
         const baseSpeed = 8;
         const speed = game.allyUpgrades.hasFasterProjectiles ? baseSpeed * 1.5 : baseSpeed;
         const projectileOptions = { size: this.projectileSize, damage: this.projectileDamage, source: 'ai_ally' };
@@ -1513,6 +1549,12 @@ export class LaserAlly extends Player {
             return;
         }
 
+        // CONFUSION LOGIC
+        if (this.isConfused) {
+             this.confusedTimer -= dt;
+             if (this.confusedTimer <= 0) this.isConfused = false;
+        }
+
         if (this.isStunned) {
             this.stunTimer -= dt;
             if (this.isFiring) {
@@ -1544,6 +1586,16 @@ export class LaserAlly extends Player {
         }
         if (this.isFiring) {
             let bestTarget = null;
+            
+            if (this.isConfused) {
+                 // Target a random spot (simulating "useless target")
+                 // E.g. a point in empty space or the corner
+                 this.laserTarget = { 
+                     x: (Math.random() > 0.5 ? 0 : canvas.width), 
+                     y: canvas.height / 2 
+                 };
+                 return; // Skip normal targeting
+            }
 
             // PRIORITY TARGETING FOR LASER ALLY
             // Mini-Behemoth > Stunner > Legion Gate (Elite) > Monolith
@@ -1678,6 +1730,11 @@ export class EchoAlly {
     }
 
     update(game, dt) {
+        if (this.isConfused) {
+             this.confusedTimer -= dt;
+             if (this.confusedTimer <= 0) this.isConfused = false;
+        }
+
         if (this.isStunned) {
              this.stunTimer -= dt;
              if (this.stunTimer <= 0) this.isStunned = false;
@@ -1721,6 +1778,12 @@ export class VampAlly {
         ctx.save();
         // Visuals: Crimson red drone
         ctx.fillStyle = '#dc143c'; // Crimson
+
+        // CHAOS MODE VISUAL (Confused)
+        if (this.isConfused) {
+             ctx.shadowColor = 'purple';
+             ctx.shadowBlur = 20;
+        }
         
         // Hover effect
         const yOffset = Math.sin(this.floatTimer * 3) * 5;
@@ -1781,6 +1844,11 @@ export class VampAlly {
         if (this.isRetreating) return;
         
         this.floatTimer += dt;
+        
+        if (this.isConfused) {
+             this.confusedTimer -= dt;
+             if (this.confusedTimer <= 0) this.isConfused = false;
+        }
 
         // Auto Attack Logic
         // Target closest enemy
@@ -1795,7 +1863,11 @@ export class VampAlly {
              }
         }
 
-        if (bestTarget) {
+        if (this.isConfused) {
+             // Vamp ally does nothing or beams empty space
+             this.isFiring = false;
+             this.beamTarget = null;
+        } else if (bestTarget) {
             this.isFiring = true;
             this.beamTarget = bestTarget;
             // Siphon Damage (Low but constant)
@@ -1804,6 +1876,102 @@ export class VampAlly {
             this.isFiring = false;
             this.beamTarget = null;
         }
+    }
+}
+
+export class Breacher extends Asteroid {
+    constructor(game) {
+        super(game, { type: 'breacher' });
+        this.size = 12; // Small
+        this.speed = 5; // Fast
+        this.health = 3; // Low HP but not one-shot
+        this.color = '#FF4500'; // OrangeRed
+        
+        // Shape: Arrow/Triangle pointing down
+        this.shape = [
+            { x: -10, y: -10 },
+            { x: 10, y: -10 },
+            { x: 0, y: 15 }
+        ];
+    }
+
+    draw(game) {
+        ctx.save();
+        ctx.fillStyle = this.color;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = this.color;
+        
+        // Trail effect
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(this.x - 5, this.y - 15);
+        ctx.lineTo(this.x + 5, this.y - 15);
+        ctx.fillStyle = 'rgba(255, 69, 0, 0.5)';
+        ctx.fill();
+
+        super.draw(game);
+        ctx.restore();
+    }
+
+    update(game, dt) {
+        // Breacher ignores player, rushes straight down
+        this.y += this.speed * 60 * dt;
+        
+        // Slight wiggle
+        this.x += Math.sin(this.y / 50) * 1;
+    }
+}
+
+export class BrickWall extends Asteroid {
+    constructor(game) {
+        super(game, { isBoss: true });
+        this.size = 300; // Massive
+        this.x = canvas.width / 2;
+        this.y = -300;
+        this.initialY = 150;
+        this.health = 50000;
+        this.maxHealth = 50000;
+        this.color = '#696969'; // DimGray
+        this.type = 'brick_wall';
+        this.state = 'enter';
+    }
+
+    draw(game) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        
+        ctx.fillStyle = this.color;
+        ctx.shadowColor = '#000';
+        ctx.shadowBlur = 50;
+        // Big Rectangle
+        ctx.fillRect(-this.size/2, -this.size/4, this.size, this.size/2);
+        
+        // Texture/Detail
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(-this.size/2, -this.size/4, this.size, this.size/2);
+        
+        // "THE WALL" Text
+        ctx.fillStyle = '#333';
+        ctx.font = '40px Impact';
+        ctx.textAlign = 'center';
+        ctx.fillText("THE WALL", 0, 15);
+
+        ctx.restore();
+    }
+
+    update(game, dt) {
+        if (this.state === 'enter') {
+            this.y += 10 * dt;
+            if (this.y >= this.initialY) {
+                this.y = this.initialY;
+                this.state = 'idle';
+                game.updateGameStatus("THE WALL BLOCKADES THE PATH!");
+                game.screenShakeDuration = 60;
+            }
+        }
+        
+        // Passive. Does nothing but soak damage.
     }
 }
 
