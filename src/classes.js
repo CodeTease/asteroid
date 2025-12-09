@@ -89,8 +89,6 @@ export class Player {
 
     update(game, dt) {
         const moveSpeed = this.speed * 60 * dt;
-        if ((game.keys['ArrowLeft'] || game.keys['a']) && this.x > this.size) this.x -= moveSpeed;
-        if ((game.keys['ArrowRight'] || game.keys['d']) && this.x < canvas.width - this.size) this.x += moveSpeed;
 
         // Apply Velocity (Juggler Push)
         if (this.vx !== 0) {
