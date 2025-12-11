@@ -1,5 +1,5 @@
 import * as UI from './ui.js';
-import { Player, Projectile, AIAlly, LaserAlly, EchoAlly, VampAlly, Coolant, Asteroid, GhostAsteroid, FinalBoss, Particle, StaticMine, BehemothTurret, BehemothBomb, Monolith, MiniBehemoth, Breacher, AfterimageBoss, DefenseDrone, VoidRift, DecoyAfterimage } from './classes.js';
+import { Player, Projectile, AIAlly, LaserAlly, EchoAlly, VampAlly, Coolant, Asteroid, GhostAsteroid, FinalBoss, Particle, StaticMine, BehemothTurret, BehemothBomb, Monolith, MiniBehemoth, Breacher, AfterimageBoss, DefenseDrone, VoidRift, SolidDecoy } from './classes.js';
 import { audioManager } from './audio.js';
 import { CONFIG } from './config.js';
 import { ObjectPool } from './pool.js';
@@ -412,8 +412,8 @@ export class Game {
         for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
             const p = this.enemyProjectiles[i];
 
-            // Special Logic for persistent projectiles (Bomb, Rift, Decoy)
-            if (p instanceof BehemothBomb || p instanceof VoidRift || p instanceof DecoyAfterimage) {
+            // Special Logic for persistent projectiles (Bomb, Rift)
+            if (p instanceof BehemothBomb || p instanceof VoidRift) {
                 if (p.update(this, dt)) {
                     this.enemyProjectiles.splice(i, 1);
                     continue;
@@ -949,7 +949,7 @@ export class Game {
         // Player vs Enemy Projectiles
         for (let j = this.enemyProjectiles.length - 1; j >= 0; j--) {
             const p = this.enemyProjectiles[j];
-            if (p instanceof BehemothBomb || p instanceof VoidRift || p instanceof DecoyAfterimage) continue; // Custom collision
+            if (p instanceof BehemothBomb || p instanceof VoidRift) continue; // Custom collision
 
             if (this.checkCollision(this.player, p)) {
                 if (this.godMode) return; // God Mode Check

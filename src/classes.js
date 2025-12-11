@@ -2123,6 +2123,22 @@ export class AfterimageBoss extends Asteroid {
              this.x = this.trueX;
              this.y = this.trueY;
         }
+        
+        // Rewind State Logic
+        if (this.state === 'rewind') {
+             this.x += this.dashVelocity.x * moveFactor;
+             this.y += this.dashVelocity.y * moveFactor;
+             
+             if (this.y <= this.initialY) {
+                 this.y = this.initialY;
+                 this.state = 'idle';
+                 this.stateTimer = 1;
+                 this.vx = 0;
+                 this.vy = 0;
+                 game.updateGameStatus("REWIND COMPLETE!");
+             }
+             return;
+        }
 
         // Phase 2 Check
         if (!this.enraged && this.health < 5000) {
@@ -2183,12 +2199,12 @@ export class AfterimageBoss extends Asteroid {
                 this.state = 'lock';
                 this.stateTimer = this.enraged ? 0.5 : 1.5; // Buffed Lock Times
                 
-                // Phantom Feint (Enraged)
+                // Phantom Feint / Solid Decoys (Enraged)
                 if (this.enraged) {
-                     for(let i=0; i<3; i++) {
+                     for(let i=0; i<2; i++) {
                          const dx = (Math.random() - 0.5) * 300;
                          const dy = (Math.random() - 0.5) * 100;
-                         game.enemyProjectiles.push(new DecoyAfterimage(this.x + dx, this.y + dy, this.color));
+                         game.asteroids.push(new SolidDecoy(game, this.x + dx, this.y + dy, this));
                      }
                 }
 
@@ -2224,19 +2240,23 @@ export class AfterimageBoss extends Asteroid {
         } 
         else if (this.state === 'lock') {
              this.stateTimer -= dt;
-             // Update line endpoint? Spec says "Lock... dừng lại...". 
-             // Does the line follow the player during lock? 
-             // "Một đường kẻ hiện ra... 3s delay... Đây là lúc player phải di chuyển".
-             // Implies the line is static after locking, or follows then freezes?
-             // Usually "Lock" means it tracks then freezes.
-             // Let's make it track for first 80% then freeze.
-             // Or simpler: Lock instantly at start of state, static line. 
-             // "Lock (Khóa mục tiêu): ... Một đường kẻ hiện ra nối đến vị trí hiện tại".
-             // Let's keep it static to be dodgeable.
              
              if (this.stateTimer <= 0) {
-                 this.state = 'dash';
-                 audioManager.playSound('enemyShoot'); // Dash sound
+                 // Fake Lock Chance (30%)
+                 if (this.enraged && Math.random() < 0.3) {
+                      // Fake!
+                      this.x = Math.random() * (canvas.width - 100) + 50;
+                      this.y = Math.random() * 200 + 50;
+                      this.trueX = this.x;
+                      this.trueY = this.y;
+                      this.stateTimer = 0.5; // Relock
+                      game.createExplosion(this.x, this.y, 'cyan', 10);
+                      game.updateGameStatus("FAKE OUT!");
+                 } else {
+                      this.state = 'dash';
+                      this.dashCount = 3; // Reset Bounce Count
+                      audioManager.playSound('enemyShoot'); // Dash sound
+                 }
              }
         }
         else if (this.state === 'dash') {
@@ -2249,57 +2269,57 @@ export class AfterimageBoss extends Asteroid {
                  this.lastRiftTime = performance.now();
              }
 
-             // Check Wall Collision (Bottom only? Or any wall?)
-             // Spec: "đâm vào đáy màn hình (Tường): Boss Vỡ vụn"
-             // Also check side walls to bounce? Spec says "Non-homing... Lao cực nhanh theo đường thẳng".
-             // If it hits side, it might bounce or stop.
-             // Let's assume it only shatters on Bottom or maybe sides too if aiming sideways.
-             // Let's simple check: If off screen or hit bottom.
-             
-             if (this.y > canvas.height - this.size || this.x < 0 || this.x > canvas.width) {
-                 // HIT WALL -> SHATTER
-                 this.state = 'shattered';
-                 this.stateTimer = 2; // 2 seconds invisible/respawning
-                 
-                 const shatterX = this.x;
-                 const shatterY = this.y;
+             // RICOCHET LOGIC (Enraged)
+             let hitWall = false;
+             if (this.x < 0 || this.x > canvas.width) {
+                 this.dashVelocity.x *= -1;
+                 hitWall = true;
+             }
+             if (this.y > canvas.height - this.size) {
+                 this.dashVelocity.y *= -1; // Bounce up
+                 hitWall = true;
+             }
 
-                 game.createExplosion(shatterX, shatterY, this.color, 50);
+             if (hitWall) {
+                 game.createExplosion(this.x, this.y, 'cyan', 20);
                  
-                 // Destroy Drone if exists to prevent permanent invulnerability
-                 if (this.drone && !this.drone.isDead()) {
-                     this.drone.health = 0; 
-                     this.drone = null;
-                 }
-
-                 // Move off-screen to prevent hitbox collision
-                 this.x = -1000;
-                 this.y = -1000;
-
-                 game.screenShakeDuration = 20;
-                 
-                 // Spawn Breachers (Shrapnel) at SHATTER location
-                 // Fix: Ensure spawn is not too low (below kill zone)
-                 const spawnY = Math.min(shatterY, canvas.height - 30);
-
-                 const count = this.enraged ? 8 : 5;
-                 for (let i = 0; i < count; i++) {
-                      // Fan out velocity
-                      // Upwards (-y) and random x
-                      const vx = (Math.random() - 0.5) * 10;
-                      const vy = -(Math.random() * 5 + 10); // Shoot up
-                      game.asteroids.push(new Breacher(game, { x: shatterX, y: spawnY, vx, vy }));
-                 }
-                 
-                 // Chain Dash Logic (Enraged)
-                 if (this.enraged) {
-                     this.dashCount++;
-                     if (this.dashCount >= 3) {
-                         this.dashCount = 0;
-                         // Full reset after 3 dashes
+                 if (this.enraged && this.dashCount > 0) {
+                     this.dashCount--;
+                     // Continue Dashing
+                 } else {
+                     // SHATTER / REWIND
+                     // Check Rewind Chance (30%)
+                     if (this.enraged && Math.random() < 0.3) {
+                          this.state = 'rewind';
+                          // Velocity towards start
+                          const dx = this.initialY - this.y; // Up
+                          // Just fly straight up fast
+                          this.dashVelocity = { x: 0, y: -40 }; 
+                          game.updateGameStatus("TEMPORAL REWIND!");
                      } else {
-                         // Quick respawn for next chain
-                         this.stateTimer = 0.5; 
+                         // SHATTER
+                         this.state = 'shattered';
+                         this.stateTimer = 2; 
+                         
+                         const shatterX = this.x;
+                         const shatterY = this.y;
+
+                         game.createExplosion(shatterX, shatterY, this.color, 50);
+                         
+                         if (this.drone) { this.drone.health = 0; this.drone = null; }
+
+                         this.x = -1000;
+                         this.y = -1000;
+
+                         game.screenShakeDuration = 20;
+                         
+                         const spawnY = Math.min(shatterY, canvas.height - 30);
+                         const count = 8;
+                         for (let i = 0; i < count; i++) {
+                              const vx = (Math.random() - 0.5) * 10;
+                              const vy = -(Math.random() * 5 + 10);
+                              game.asteroids.push(new Breacher(game, { x: shatterX, y: spawnY, vx, vy }));
+                         }
                      }
                  }
              }
@@ -2562,23 +2582,52 @@ export class VoidRift {
     }
 }
 
-export class DecoyAfterimage {
-    constructor(x, y, color) {
+export class SolidDecoy extends Asteroid {
+    constructor(game, x, y, boss) {
+        super(game, { type: 'breacher', isBoss: false });
+        this.type = 'solid_decoy';
         this.x = x;
         this.y = y;
-        this.color = color;
+        this.boss = boss;
+        this.color = 'rgba(0, 255, 255, 0.3)';
         this.size = 40;
-        this.life = 0.5;
-        this.alpha = 0.5;
+        this.health = 30; 
+        this.maxHealth = 30;
     }
-    
+
+    update(game, dt) {
+        // Die if boss unavailable or shattered
+        if (!this.boss || this.boss.health <= 0 || !game.asteroids.includes(this.boss) || this.boss.state === 'shattered' || this.boss.state === 'rewind') {
+             this.health = 0;
+             game.createExplosion(this.x, this.y, this.color, 10);
+             return;
+        }
+
+        // Mirror Boss State
+        if (this.boss.state === 'dash' || this.boss.state === 'rewind') {
+             // Move parallel to boss
+             this.x += this.boss.dashVelocity.x * 60 * dt;
+             this.y += this.boss.dashVelocity.y * 60 * dt;
+        } else if (this.boss.state === 'lock') {
+             // Jitter
+             this.x += (Math.random() - 0.5) * 5;
+             this.y += (Math.random() - 0.5) * 5;
+        }
+
+        // Standard Asteroid update (collisions etc)
+        // Check bounds?
+        if (this.y > canvas.height + 50 || this.x < -50 || this.x > canvas.width + 50) {
+             this.health = 0;
+        }
+    }
+
     draw(game) {
         ctx.save();
         ctx.translate(this.x, this.y);
-        ctx.globalAlpha = this.alpha * (this.life / 0.5);
+        ctx.globalAlpha = 0.5;
         ctx.fillStyle = this.color;
         ctx.shadowBlur = 10;
-        ctx.shadowColor = this.color;
+        ctx.shadowColor = 'cyan';
         
         // Shape matches AfterimageBoss
         ctx.beginPath();
@@ -2590,10 +2639,5 @@ export class DecoyAfterimage {
         ctx.fill();
         
         ctx.restore();
-    }
-    
-    update(game, dt) {
-        this.life -= dt;
-        return this.life <= 0;
     }
 }
