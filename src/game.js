@@ -1,10 +1,16 @@
 import * as UI from './ui.js';
 import { Player, Projectile, AIAlly, LaserAlly, EchoAlly, VampAlly, Coolant, Asteroid, GhostAsteroid, FinalBoss, Particle, StaticMine, BehemothTurret, BehemothBomb, Monolith, MiniBehemoth, Breacher, BrickWall } from './classes.js';
 import { audioManager } from './audio.js';
+import { CONFIG } from './config.js';
+import { ObjectPool } from './pool.js';
 
 export class Game {
     constructor() {
         this.animationFrameId = 0;
+        
+        // Object Pools
+        this.projectilePool = new ObjectPool(() => new Projectile(0, 0), 200);
+        this.particlePool = new ObjectPool(() => new Particle(0, 0, '#fff'), 200);
         this.keys = {};
 
         // Game State Variables
@@ -102,6 +108,11 @@ export class Game {
         this.isGameOver = false;
         this.isPaused = false;
         this.player = new Player();
+        
+        // Release existing pooled objects
+        this.projectilePool.releaseAll();
+        this.particlePool.releaseAll();
+
         this.projectiles = [];
         this.enemyProjectiles = [];
         this.asteroids = [];
@@ -113,8 +124,8 @@ export class Game {
         this.deltaTime = 0;
         this.lastTime = 0;
         this.lastSpawnTime = 0;
-        this.nextBossTime = 60;
-        this.nextShieldScore = 1500;
+        this.nextBossTime = CONFIG.GAME.BOSS_SPAWN_TIME;
+        this.nextShieldScore = CONFIG.PLAYER.SHIELD_RECHARGE_SCORE_STEP;
         this.isBossActive = false;
         this.isFinalBossActive = false;
         this.finalBossWarningShown = false;
@@ -180,7 +191,7 @@ export class Game {
     gameLoop(currentTime) {
         let deltaTime = (currentTime - this.lastTime) / 1000;
         this.lastTime = currentTime;
-        if (deltaTime > 0.25) deltaTime = 0.25;
+        if (deltaTime > CONFIG.GAME.MAX_DELTA_TIME) deltaTime = CONFIG.GAME.MAX_DELTA_TIME;
 
         if (this.isPaused) {
             this.animationFrameId = requestAnimationFrame((t) => this.gameLoop(t));
@@ -392,7 +403,7 @@ export class Game {
             
             // CLEANUP LOGIC: Expired or Off-screen
             if (p.y < 0 || p.y > UI.canvas.height || p.x < 0 || p.x > UI.canvas.width) {
-                this.projectiles.splice(i, 1);
+                this.removeProjectile(i);
             }
         }
         for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
@@ -410,6 +421,10 @@ export class Game {
 
             if (p.y < 0 || p.y > UI.canvas.height || p.x < 0 || p.x > UI.canvas.width) {
                 this.enemyProjectiles.splice(i, 1);
+                // Note: enemyProjectiles might also be pooled if they are standard Projectiles
+                if (p instanceof Projectile) {
+                    this.projectilePool.release(p);
+                }
             }
         }
         for (let i = this.asteroids.length - 1; i >= 0; i--) {
@@ -469,7 +484,14 @@ export class Game {
                 }
             }
         }
-        this.particles.forEach((p, i) => { p.update(this, dt); if (p.life <= 0) this.particles.splice(i, 1); });
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            const p = this.particles[i];
+            p.update(this, dt);
+            if (p.life <= 0) {
+                this.particles.splice(i, 1);
+                this.particlePool.release(p);
+            }
+        }
 
         if (!this.isGameOver) {
             this.checkCollisions();
@@ -948,25 +970,26 @@ export class Game {
 
         // Projectiles vs Enemies
         for (let i = this.projectiles.length - 1; i >= 0; i--) {
+            const projectile = this.projectiles[i];
             let hitSomething = false;
 
             for (let j = this.asteroids.length - 1; j >= 0; j--) {
-                if (!this.projectiles[i] || !this.asteroids[j]) continue;
-                if (this.checkCollision(this.projectiles[i], this.asteroids[j])) {
-                    const asteroid = this.asteroids[j];
+                const asteroid = this.asteroids[j];
+                if (!projectile || !asteroid) continue;
+                if (this.checkCollision(projectile, asteroid)) {
                     
                     // BEHEMOTH LOGIC (AI Ally Immunity)
-                    if (asteroid.type === 'behemoth' && this.projectiles[i].source === 'ai_ally') {
-                        this.createExplosion(this.projectiles[i].x, this.projectiles[i].y, '#888', 5);
-                        this.projectiles.splice(i, 1);
+                    if (asteroid.type === 'behemoth' && projectile.source === 'ai_ally') {
+                        this.createExplosion(projectile.x, projectile.y, '#888', 5);
+                        this.removeProjectile(i);
                         hitSomething = true;
                         break;
                     }
 
                     // TANKER PARRY LOGIC (Small AI Ally projectiles)
-                    if (asteroid.type === 'tanker' && this.projectiles[i].source === 'ai_ally') {
-                         this.createExplosion(this.projectiles[i].x, this.projectiles[i].y, '#888', 5); // Grey spark
-                         this.projectiles.splice(i, 1);
+                    if (asteroid.type === 'tanker' && projectile.source === 'ai_ally') {
+                         this.createExplosion(projectile.x, projectile.y, '#888', 5); // Grey spark
+                         this.removeProjectile(i);
                          hitSomething = true;
                          break;
                     }
@@ -974,8 +997,8 @@ export class Game {
                     // BULWARK SHIELD LOGIC
                     if (asteroid.type === 'bulwark') {
                         if (this.player.y > asteroid.y) {
-                            this.createExplosion(this.projectiles[i].x, this.projectiles[i].y, '#00e5ff', 5);
-                            this.projectiles.splice(i, 1);
+                            this.createExplosion(projectile.x, projectile.y, '#00e5ff', 5);
+                            this.removeProjectile(i);
                             hitSomething = true;
                             break;
                         }
@@ -983,19 +1006,19 @@ export class Game {
 
                     this.createExplosion(asteroid.x, asteroid.y, asteroid.color, 5);
 
-                    let damage = this.projectiles[i].damage;
+                    let damage = projectile.damage;
 
                     // VOID MODE GLOBAL DAMAGE BUFF (x2) - STARTS AT 100s+ (As per original Void Mode design)
-                    if (this.finalBossDefeated && this.getVoidTime() >= 100) damage *= 2;
+                    if (this.finalBossDefeated && this.getVoidTime() >= CONFIG.GAME.VOID_MODE_START_TIME) damage *= 2;
 
                     // MONOLITH CUSTOM DAMAGE LOGIC
                     if (asteroid instanceof Monolith) {
-                        const actualDamage = asteroid.takeDamage(damage, this.projectiles[i].source, this.projectiles[i].x, this.projectiles[i].y);
+                        const actualDamage = asteroid.takeDamage(damage, projectile.source, projectile.x, projectile.y);
                         // Visual feedback for immunity/resist
                         if (actualDamage === 0) {
-                             this.createExplosion(this.projectiles[i].x, this.projectiles[i].y, '#888', 5);
+                             this.createExplosion(projectile.x, projectile.y, '#888', 5);
                         } else if (actualDamage < damage) {
-                             this.createExplosion(this.projectiles[i].x, this.projectiles[i].y, '#purple', 5); // Resisted color
+                             this.createExplosion(projectile.x, projectile.y, '#purple', 5); // Resisted color
                         }
                     } else {
                         asteroid.health -= damage;
@@ -1007,12 +1030,20 @@ export class Game {
                          this.createExplosion(asteroid.x, asteroid.y, '#ffffff', 2); // White shield sparks
                     }
 
-                    this.projectiles.splice(i, 1);
+                    this.removeProjectile(i);
                     hitSomething = true;
                     break;
                 }
             }
             if (hitSomething) continue;
+        }
+    }
+    
+    removeProjectile(index) {
+        const p = this.projectiles[index];
+        if (p) {
+            this.projectiles.splice(index, 1);
+            this.projectilePool.release(p);
         }
     }
 
@@ -1179,7 +1210,8 @@ export class Game {
 
     createExplosion(x, y, color, count = 20) {
         for (let i = 0; i < count; i++) {
-            this.particles.push(new Particle(x, y, color));
+            const p = this.particlePool.get({ x, y, color });
+            this.particles.push(p);
         }
     }
 
@@ -1389,7 +1421,8 @@ export class Game {
             const speed = 12 + Math.random() * 5;
             const vx = Math.cos(angle) * speed;
             const vy = Math.sin(angle) * speed;
-            this.projectiles.push(new Projectile(playerX, playerY, {
+            this.projectiles.push(this.projectilePool.get({
+                x: playerX, y: playerY,
                 vx, vy,
                 size: 8,
                 damage: 50,

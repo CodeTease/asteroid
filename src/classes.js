@@ -1,6 +1,6 @@
-import { Game } from "./game.js";
 import { canvas, ctx } from "./ui.js";
 import { audioManager } from "./audio.js";
+import { CONFIG } from "./config.js";
 
 // --- GAME CLASSES ---
 
@@ -8,11 +8,11 @@ export class Player {
     constructor() {
         this.x = canvas.width / 2;
         this.y = canvas.height - 40;
-        this.size = 15;
-        this.speed = 4;
-        this.projectileSize = 5;
-        this.projectileDamage = 1;
-        this.fireRate = 1;
+        this.size = CONFIG.PLAYER.INITIAL_SIZE;
+        this.speed = CONFIG.PLAYER.INITIAL_SPEED;
+        this.projectileSize = CONFIG.PLAYER.INITIAL_PROJECTILE_SIZE;
+        this.projectileDamage = CONFIG.PLAYER.INITIAL_PROJECTILE_DAMAGE;
+        this.fireRate = CONFIG.PLAYER.INITIAL_FIRE_RATE;
         this.alpha = 1;
         this.allies = [];
         this.lastX = this.x;
@@ -25,7 +25,7 @@ export class Player {
 
         // Heat System
         this.heat = 0;
-        this.maxHeat = 100;
+        this.maxHeat = CONFIG.PLAYER.MAX_HEAT;
         this.isOverheated = false;
         this.overheatTimeout = null;
     }
@@ -124,9 +124,9 @@ export class Player {
             // Check for BehemothTurret
             const hasBehemoth = game.asteroids.some(a => a instanceof BehemothTurret);
 
-            let decayRate = 40;
-            if (hasSizzler) decayRate = 20;
-            if (hasBehemoth) decayRate = 10; // Behemoth significantly reduces cooling
+            let decayRate = CONFIG.PLAYER.HEAT_DECAY_RATE;
+            if (hasSizzler) decayRate = CONFIG.PLAYER.HEAT_DECAY_RATE / 2;
+            if (hasBehemoth) decayRate = CONFIG.PLAYER.HEAT_DECAY_RATE / 4; // Behemoth significantly reduces cooling
 
             this.heat -= decayRate * dt; // Decay speed
             if (this.heat < 0) this.heat = 0;
@@ -143,9 +143,9 @@ export class Player {
              // Check for BehemothTurret
             const hasBehemoth = game.asteroids.some(a => a instanceof BehemothTurret);
 
-            let heatGen = 10;
-            if (hasSizzler) heatGen = 12;
-            if (hasBehemoth) heatGen = 15; // Behemoth increases heat generation
+            let heatGen = CONFIG.PLAYER.HEAT_GENERATION;
+            if (hasSizzler) heatGen = CONFIG.PLAYER.HEAT_GENERATION * 1.2;
+            if (hasBehemoth) heatGen = CONFIG.PLAYER.HEAT_GENERATION * 1.5; // Behemoth increases heat generation
 
             this.heat += heatGen;
             if (this.heat >= this.maxHeat) {
@@ -178,14 +178,14 @@ export class Player {
 
             if (this.fireRate === 2) {
                 if (game.isAimUnlocked) {
-                    game.projectiles.push(new Projectile(originX, originY, { size: this.projectileSize, damage: this.projectileDamage, vx: vx + 1, vy: vy, source: source }));
-                    game.projectiles.push(new Projectile(originX, originY, { size: this.projectileSize, damage: this.projectileDamage, vx: vx - 1, vy: vy, source: source }));
+                    game.projectiles.push(game.projectilePool.get({ x: originX, y: originY, size: this.projectileSize, damage: this.projectileDamage, vx: vx + 1, vy: vy, source: source }));
+                    game.projectiles.push(game.projectilePool.get({ x: originX, y: originY, size: this.projectileSize, damage: this.projectileDamage, vx: vx - 1, vy: vy, source: source }));
                 } else {
-                    game.projectiles.push(new Projectile(originX - 7, originY, { size: this.projectileSize, damage: this.projectileDamage, source: source }));
-                    game.projectiles.push(new Projectile(originX + 7, originY, { size: this.projectileSize, damage: this.projectileDamage, source: source }));
+                    game.projectiles.push(game.projectilePool.get({ x: originX - 7, y: originY, size: this.projectileSize, damage: this.projectileDamage, source: source }));
+                    game.projectiles.push(game.projectilePool.get({ x: originX + 7, y: originY, size: this.projectileSize, damage: this.projectileDamage, source: source }));
                 }
             } else {
-                game.projectiles.push(new Projectile(originX, originY, { size: this.projectileSize, damage: this.projectileDamage, vx, vy, source: source }));
+                game.projectiles.push(game.projectilePool.get({ x: originX, y: originY, size: this.projectileSize, damage: this.projectileDamage, vx, vy, source: source }));
             }
         };
 
@@ -205,8 +205,12 @@ export class Player {
 
 export class Projectile {
     constructor(x, y, options = {}) {
-        this.x = x;
-        this.y = y;
+        this.reset({ x, y, ...options });
+    }
+
+    reset(options) {
+        this.x = options.x ?? 0;
+        this.y = options.y ?? 0;
         this.size = options.size ?? 5;
         this.damage = options.damage ?? 1;
         this.vx = options.vx ?? 0;
@@ -278,54 +282,57 @@ export class Asteroid {
             else this.type = 'standard';
         }
 
-        let healthMultiplier = game.gameTime >= 200 ? 2 : 1;
+        let healthMultiplier = game.gameTime >= CONFIG.ENEMIES.BASE_MULTIPLIER_TIME_THRESHOLD ? 2 : 1;
         // VOID MODE EXTENDED BUFF (Global x1.5 HP for ALL enemies after Behemoth Defeated)
         if (game.behemothDefeated) {
-            healthMultiplier *= 1.5;
+            healthMultiplier *= CONFIG.ENEMIES.VOID_MODE_HP_MULTIPLIER;
         }
 
         if (this.isElite) {
-            healthMultiplier *= 2; // Elite x2 HP
+            healthMultiplier *= CONFIG.ENEMIES.ELITE_HP_MULTIPLIER; // Elite x2 HP
         }
 
-        switch (this.type) {
-            case 'boss':
-                this.size = 60; this.speed = 0.8; this.health = options.healthOverride ?? (50 * healthMultiplier); this.color = '#ff4500';
-                break;
-            case 'orbiter': // VOID LEGION
-                this.size = 15; this.speed = 3; this.health = 3 * healthMultiplier; this.color = '#ffff00'; // Yellow
-                break;
-            case 'weaver': // VOID LEGION
-                this.size = 20; this.speed = 2; this.health = 2 * healthMultiplier; this.color = '#ff00ff'; // Magenta
-                break;
-            case 'bulwark': // VOID LEGION
-                this.size = 40; this.speed = 0.5; this.health = 10 * healthMultiplier; this.color = '#444'; // Dark Grey
-                break;
-            case 'sizzler': // NEW VOID LEGION
-                this.size = 50; this.speed = 0.5; this.health = 25 * healthMultiplier; this.color = '#ff6600'; // Orange
-                break;
-            case 'juggler': // NEW VOID LEGION
-                this.size = 25; this.speed = 2.5; this.health = 4 * healthMultiplier; this.color = '#00ff00'; // Green
-                this.pushRadius = 200;
-                break;
-            case 'anchor': // NEW VOID LEGION
-                this.size = 15; this.speed = 4; this.health = 3 * healthMultiplier; this.color = '#ffffff'; // White
-                break;
-            case 'tanker': // NEW VOID LEGION
-                this.size = 45; this.speed = 1; this.health = 30 * healthMultiplier; this.color = '#8B4513'; // SaddleBrown
-                break;
-            case 'stunner': // NEW VOID LEGION
-                this.size = 30; this.speed = 0.5; this.health = 15 * healthMultiplier; this.color = '#FFFFE0'; // LightYellow
-                break;
-            // ... (Existing types kept same) ...
-            case 'scout': this.size = 12; this.speed = Math.random() * 2 + 2.5; this.health = 1 * healthMultiplier; this.color = '#add8e6'; break;
-            case 'brute': this.size = 35; this.speed = Math.random() * 1 + 0.8; this.health = 2 * healthMultiplier; this.color = '#d2b48c'; break;
-            case 'shard': this.size = 20; this.speed = Math.random() * 1.5 + 1; this.health = 1 * healthMultiplier; this.color = '#dda0dd'; this.vx = (Math.random() - 0.5) * 2; break;
-            case 'shooter': this.size = 25; this.speed = Math.random() * 1 + 1; this.health = 2 * healthMultiplier; this.color = '#9400d3'; break;
-            case 'splitter': this.size = 30; this.speed = Math.random() * 1 + 1; this.health = 1 * healthMultiplier; this.color = '#ff8c00'; break;
-            case 'seeker': this.size = 18; this.speed = 6; this.health = 1 * healthMultiplier; this.color = '#ff3333'; if (game.player) { const dx = game.player.x - this.x; const dy = game.player.y - this.y; const dist = Math.hypot(dx, dy); this.vx = (dx / dist) * 2; } break;
-            case 'teleporter': this.size = 28; this.speed = 0.2; this.health = 3 * healthMultiplier; this.color = '#00ffcc'; this.fireCooldown = 1500; break;
-            case 'standard': default: this.size = options.size ?? (Math.random() * 20 + 15); this.speed = Math.random() * 2 + 1; this.health = 1 * healthMultiplier; this.color = '#a9a9a9'; break;
+        const stats = CONFIG.ENEMIES.STATS[this.type] || CONFIG.ENEMIES.STATS.standard;
+
+        // Apply Stats from Config (preserving existing logic for overrides and some randomness)
+        // If specific logic is needed per type (like custom movement code), it remains in update() or here.
+        
+        if (this.type === 'boss') {
+            this.size = stats.size;
+            this.speed = stats.speed;
+            this.health = options.healthOverride ?? (stats.hp * healthMultiplier);
+            this.color = stats.color;
+        } else if (this.type === 'standard') {
+             this.size = options.size ?? (Math.random() * 20 + 15);
+             this.speed = Math.random() * 2 + 1;
+             this.health = stats.hp * healthMultiplier;
+             this.color = stats.color;
+        } else if (['scout', 'brute', 'shard', 'shooter', 'splitter', 'seeker'].includes(this.type)) {
+             // Retain randomness for standard enemies
+             this.size = stats.size;
+             this.health = stats.hp * healthMultiplier;
+             this.color = stats.color;
+             
+             if (this.type === 'scout') this.speed = Math.random() * 2 + 2.5;
+             else if (this.type === 'brute') this.speed = Math.random() * 1 + 0.8;
+             else if (this.type === 'shard') { this.speed = Math.random() * 1.5 + 1; this.vx = (Math.random() - 0.5) * 2; }
+             else if (this.type === 'shooter') this.speed = Math.random() * 1 + 1;
+             else if (this.type === 'splitter') this.speed = Math.random() * 1 + 1;
+             else if (this.type === 'seeker') {
+                  this.speed = stats.speed; 
+                  if (game.player) { 
+                      const dx = game.player.x - this.x; const dy = game.player.y - this.y; const dist = Math.hypot(dx, dy); this.vx = (dx / dist) * 2; 
+                  }
+             }
+        } else {
+             // Void Legion & Others - Use Config directly
+             this.size = stats.size;
+             this.speed = stats.speed;
+             this.health = stats.hp * healthMultiplier;
+             this.color = stats.color;
+             
+             if (this.type === 'teleporter') this.fireCooldown = 1500;
+             if (this.type === 'juggler') this.pushRadius = 200;
         }
 
         this.maxHealth = this.health; // Set Max Health
@@ -680,7 +687,12 @@ export class Asteroid {
             const speed = 4;
             const vx = (dx / dist) * speed;
             const vy = (dy / dist) * speed;
-            game.enemyProjectiles.push(new Projectile(this.x, this.y, { vx, vy, color: '#ff69b4', size: 4 }));
+            // Use Pool (note: enemyProjectiles logic in Game needs to handle release too, but typically they share the pool if generic)
+            // Wait, we used 'projectilePool' in Game for PLAYER projectiles mostly? 
+            // Game.projectilePool is generic. We can use it for enemies too if we ensure release.
+            // But game.enemyProjectiles is a separate array.
+            
+            game.enemyProjectiles.push(game.projectilePool.get({ x: this.x, y: this.y, vx, vy, color: '#ff69b4', size: 4 }));
             audioManager.playSound('enemyShoot', 0.4);
             this.lastFireTime = Date.now();
         }
@@ -701,11 +713,11 @@ export class Asteroid {
                  target.stunTimer = 5; // 5 seconds
 
                  // Create Stun Beam Effect
-                 game.particles.push(new Particle(this.x, this.y, '#ffff00')); // Simple placeholder
+                 game.particles.push(game.particlePool.get({ x: this.x, y: this.y, color: '#ffff00' })); 
 
                  // Draw beam (hacky: create a fast temporary projectile or just draw in its draw method?)
                  // Let's create a special projectile that is just visual
-                 game.enemyProjectiles.push(new Projectile(this.x, this.y, { vx: 0, vy: 0, color: 'transparent', size: 0 })); // dummy
+                 game.enemyProjectiles.push(game.projectilePool.get({ x: this.x, y: this.y, vx: 0, vy: 0, color: 'transparent', size: 0 })); // dummy
                  // Actually, let's just use game.createExplosion for visual feedback on target
                  game.createExplosion(target.x, target.y, '#ffff00', 10);
                  game.updateGameStatus("Ally Stunned!");
@@ -798,13 +810,13 @@ export class BehemothTurret extends Asteroid {
                     const angleL = Math.atan2(game.player.y - (this.y + 20), game.player.x - (this.x - this.size - 10));
                     const vxL = Math.cos(angleL) * speed;
                     const vyL = Math.sin(angleL) * speed;
-                    game.enemyProjectiles.push(new Projectile(this.x - this.size - 10, this.y + 20, { vx: vxL, vy: vyL, color: 'orange', size: 6 }));
+                    game.enemyProjectiles.push(game.projectilePool.get({ x: this.x - this.size - 10, y: this.y + 20, vx: vxL, vy: vyL, color: 'orange', size: 6 }));
 
                     // Right Gun Aim
                     const angleR = Math.atan2(game.player.y - (this.y + 20), game.player.x - (this.x + this.size + 10));
                     const vxR = Math.cos(angleR) * speed;
                     const vyR = Math.sin(angleR) * speed;
-                    game.enemyProjectiles.push(new Projectile(this.x + this.size + 10, this.y + 20, { vx: vxR, vy: vyR, color: 'orange', size: 6 }));
+                    game.enemyProjectiles.push(game.projectilePool.get({ x: this.x + this.size + 10, y: this.y + 20, vx: vxR, vy: vyR, color: 'orange', size: 6 }));
                 }
             }
 
@@ -856,7 +868,8 @@ export class MiniBehemoth extends BehemothTurret {
              if (target) {
                  const angle = Math.atan2(target.y - this.y, target.x - this.x);
                  const speed = 5;
-                 game.enemyProjectiles.push(new Projectile(this.x, this.y, {
+                 game.enemyProjectiles.push(game.projectilePool.get({
+                     x: this.x, y: this.y,
                      vx: Math.cos(angle) * speed,
                      vy: Math.sin(angle) * speed,
                      color: 'orange',
@@ -1310,7 +1323,7 @@ export class FinalBoss extends Asteroid {
                     const speed = Math.random() * 2 + 3;
                     const vx = Math.cos(angle) * speed;
                     const vy = Math.sin(angle) * speed;
-                    game.enemyProjectiles.push(new Projectile(this.x, this.y, { vx, vy, color: '#ff69b4', size: 5 }));
+                    game.enemyProjectiles.push(game.projectilePool.get({ x: this.x, y: this.y, vx, vy, color: '#ff69b4', size: 5 }));
                 }
                 break;
         }
@@ -1450,12 +1463,12 @@ export class AIAlly extends Player {
             const vy1 = Math.sin(angle - spread) * speed;
             const vx2 = Math.cos(angle + spread) * speed;
             const vy2 = Math.sin(angle + spread) * speed;
-            game.projectiles.push(new Projectile(this.x, this.y, { ...projectileOptions, vx: vx1, vy: vy1 }));
-            game.projectiles.push(new Projectile(this.x, this.y, { ...projectileOptions, vx: vx2, vy: vy2 }));
+            game.projectiles.push(game.projectilePool.get({ x: this.x, y: this.y, ...projectileOptions, vx: vx1, vy: vy1 }));
+            game.projectiles.push(game.projectilePool.get({ x: this.x, y: this.y, ...projectileOptions, vx: vx2, vy: vy2 }));
         } else {
             const vx = (dx / dist) * speed;
             const vy = (dy / dist) * speed;
-            game.projectiles.push(new Projectile(this.x, this.y, { ...projectileOptions, vx, vy }));
+            game.projectiles.push(game.projectilePool.get({ x: this.x, y: this.y, ...projectileOptions, vx, vy }));
         }
     }
 }
@@ -2108,12 +2121,16 @@ export class BehemothBomb {
 
 export class Particle {
     constructor(x, y, color) {
-        this.x = x;
-        this.y = y;
+        this.reset({ x, y, color });
+    }
+    
+    reset(options) {
+        this.x = options.x ?? 0;
+        this.y = options.y ?? 0;
+        this.color = options.color ?? '#fff';
         this.radius = Math.random() * 3 + 1;
         this.vx = Math.random() * 4 - 2;
         this.vy = Math.random() * 4 - 2;
-        this.color = color;
         this.maxLife = Math.random() * 40 + 20;
         this.life = this.maxLife;
     }
