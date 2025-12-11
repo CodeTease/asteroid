@@ -22,6 +22,9 @@ export class Player {
         
         this.isStunned = false;
         this.stunTimer = 0;
+        
+        // Status Effects
+        this.isSlowed = false;
 
         // Heat System
         this.heat = 0;
@@ -88,7 +91,13 @@ export class Player {
     }
 
     update(game, dt) {
-        const moveSpeed = this.speed * 60 * dt;
+        let speedMult = 1;
+        if (this.isSlowed) {
+            speedMult = 0.2; // 80% Slow
+            this.isSlowed = false; // Reset, requires continuous application
+        }
+
+        const moveSpeed = this.speed * speedMult * 60 * dt;
 
         // Apply Velocity (Juggler Push)
         if (this.vx !== 0) {
@@ -2033,6 +2042,10 @@ export class AfterimageBoss extends Asteroid {
         
         this.enraged = false;
         this.dashCount = 0; // For Chain Dash
+        
+        this.trueX = this.x;
+        this.trueY = this.y;
+        this.lastRiftTime = 0;
     }
     
     draw(game) {
@@ -2099,28 +2112,18 @@ export class AfterimageBoss extends Asteroid {
              ctx.restore();
         }
 
-        // Lock Line
-        if (this.state === 'lock') {
-            ctx.save();
-            ctx.strokeStyle = this.enraged ? 'red' : 'rgba(255, 0, 0, 0.5)';
-            ctx.lineWidth = this.enraged ? 4 : 2;
-            ctx.setLineDash([10, 10]);
-            ctx.beginPath();
-            ctx.moveTo(this.x, this.y);
-            ctx.lineTo(this.targetPos.x, this.targetPos.y);
-            ctx.stroke();
-            
-            // Warning Circle at target
-            ctx.beginPath();
-            ctx.arc(this.targetPos.x, this.targetPos.y, 30, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.restore();
-        }
+        // Lock Line - REMOVED (No telegraphing)
     }
     
     update(game, dt) {
         const moveFactor = 60 * dt;
         
+        // Restore True Position from Glitch Step
+        if (this.state === 'idle' || this.state === 'lock') {
+             this.x = this.trueX;
+             this.y = this.trueY;
+        }
+
         // Phase 2 Check
         if (!this.enraged && this.health < 5000) {
             this.enraged = true;
@@ -2178,8 +2181,17 @@ export class AfterimageBoss extends Asteroid {
             
             if (this.stateTimer <= 0) {
                 this.state = 'lock';
-                this.stateTimer = this.enraged ? 1 : 3; // 1s vs 3s lock time
+                this.stateTimer = this.enraged ? 0.5 : 1.5; // Buffed Lock Times
                 
+                // Phantom Feint (Enraged)
+                if (this.enraged) {
+                     for(let i=0; i<3; i++) {
+                         const dx = (Math.random() - 0.5) * 300;
+                         const dy = (Math.random() - 0.5) * 100;
+                         game.enemyProjectiles.push(new DecoyAfterimage(this.x + dx, this.y + dy, this.color));
+                     }
+                }
+
                 // Lock onto player
                 if (game.player) {
                     // Extrapolate slightly? No, spec says "vị trí hiện tại".
@@ -2231,6 +2243,12 @@ export class AfterimageBoss extends Asteroid {
              this.x += this.dashVelocity.x * moveFactor;
              this.y += this.dashVelocity.y * moveFactor;
              
+             // Residual Void (Spawn Rifts)
+             if (performance.now() - this.lastRiftTime > 100) { // Every 100ms
+                 game.enemyProjectiles.push(new VoidRift(this.x, this.y));
+                 this.lastRiftTime = performance.now();
+             }
+
              // Check Wall Collision (Bottom only? Or any wall?)
              // Spec: "đâm vào đáy màn hình (Tường): Boss Vỡ vụn"
              // Also check side walls to bounce? Spec says "Non-homing... Lao cực nhanh theo đường thẳng".
@@ -2299,6 +2317,18 @@ export class AfterimageBoss extends Asteroid {
                  this.vx = 0; 
                  this.vy = 0;
              }
+        }
+        
+        // Glitch Step (Jitter Position in Idle/Lock)
+        if (this.state === 'idle' || this.state === 'lock') {
+             this.trueX = this.x;
+             this.trueY = this.y;
+             this.x += (Math.random() - 0.5) * 40;
+             this.y += (Math.random() - 0.5) * 40;
+        } else {
+             // Ensure trueX tracks x during movement
+             this.trueX = this.x;
+             this.trueY = this.y;
         }
     }
 }
@@ -2467,5 +2497,103 @@ export class Particle {
         this.x += this.vx * moveFactor;
         this.y += this.vy * moveFactor;
         this.life--;
+    }
+}
+export class VoidRift {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.size = 30;
+        this.life = 2; // 2 seconds
+        this.color = '#800080'; // Purple
+        this.rotation = Math.random() * Math.PI;
+    }
+
+    draw(game) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+        ctx.globalAlpha = 0.6;
+        ctx.fillStyle = this.color;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = 'purple';
+        
+        // Rift shape
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+             ctx.rotate(Math.PI * 2 / 6);
+             ctx.lineTo(this.size, 0);
+             ctx.lineTo(this.size/3, 5);
+        }
+        ctx.fill();
+        
+        ctx.restore();
+    }
+
+    update(game, dt) {
+        this.life -= dt;
+        this.rotation += dt;
+        
+        // Slow Player
+        if (game.player && !game.player.isDestroyed) {
+            const dist = Math.hypot(game.player.x - this.x, game.player.y - this.y);
+            if (dist < this.size + game.player.size) {
+                game.player.isSlowed = true;
+            }
+        }
+
+        if (this.life <= 0) {
+            // Explode
+            game.createExplosion(this.x, this.y, 'purple', 20);
+            if (game.player && !game.player.isDestroyed) {
+                const dist = Math.hypot(game.player.x - this.x, game.player.y - this.y);
+                if (dist < 60) { // Explosion radius
+                     if (game.player.shieldCharges > 0) {
+                         game.player.shieldCharges--;
+                         game.updateGameStatus("Shield damaged by Void Rift!");
+                     } else {
+                         game.handleGameOver("Consumed by Void Rift!");
+                     }
+                }
+            }
+            return true; // Destroy
+        }
+        return false;
+    }
+}
+
+export class DecoyAfterimage {
+    constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.size = 40;
+        this.life = 0.5;
+        this.alpha = 0.5;
+    }
+    
+    draw(game) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.globalAlpha = this.alpha * (this.life / 0.5);
+        ctx.fillStyle = this.color;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = this.color;
+        
+        // Shape matches AfterimageBoss
+        ctx.beginPath();
+        ctx.moveTo(0, -this.size);
+        ctx.lineTo(this.size, 0);
+        ctx.lineTo(0, this.size);
+        ctx.lineTo(-this.size, 0);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.restore();
+    }
+    
+    update(game, dt) {
+        this.life -= dt;
+        return this.life <= 0;
     }
 }

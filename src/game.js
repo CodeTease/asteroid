@@ -1,5 +1,5 @@
 import * as UI from './ui.js';
-import { Player, Projectile, AIAlly, LaserAlly, EchoAlly, VampAlly, Coolant, Asteroid, GhostAsteroid, FinalBoss, Particle, StaticMine, BehemothTurret, BehemothBomb, Monolith, MiniBehemoth, Breacher, AfterimageBoss, DefenseDrone } from './classes.js';
+import { Player, Projectile, AIAlly, LaserAlly, EchoAlly, VampAlly, Coolant, Asteroid, GhostAsteroid, FinalBoss, Particle, StaticMine, BehemothTurret, BehemothBomb, Monolith, MiniBehemoth, Breacher, AfterimageBoss, DefenseDrone, VoidRift, DecoyAfterimage } from './classes.js';
 import { audioManager } from './audio.js';
 import { CONFIG } from './config.js';
 import { ObjectPool } from './pool.js';
@@ -949,7 +949,7 @@ export class Game {
         // Player vs Enemy Projectiles
         for (let j = this.enemyProjectiles.length - 1; j >= 0; j--) {
             const p = this.enemyProjectiles[j];
-            if (p instanceof BehemothBomb) continue; // Bomb handles its own collision in update
+            if (p instanceof BehemothBomb || p instanceof VoidRift || p instanceof DecoyAfterimage) continue; // Custom collision
 
             if (this.checkCollision(this.player, p)) {
                 if (this.godMode) return; // God Mode Check
