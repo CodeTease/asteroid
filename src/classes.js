@@ -2544,7 +2544,7 @@ export class VoidRift {
 
         if (this.life <= 0) {
             // Explode
-            game.createExplosion(this.x, this.y, 'purple', 20);
+            game.createExplosion(this.x, this.y, 'purple', 8);
             if (game.player && !game.player.isDestroyed) {
                 const dist = Math.hypot(game.player.x - this.x, game.player.y - this.y);
                 if (dist < 60) { // Explosion radius

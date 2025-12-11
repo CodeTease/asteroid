@@ -412,8 +412,8 @@ export class Game {
         for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
             const p = this.enemyProjectiles[i];
 
-            // Behemoth Bomb Special Logic (returns true if it exploded/expired)
-            if (p instanceof BehemothBomb) {
+            // Special Logic for persistent projectiles (Bomb, Rift, Decoy)
+            if (p instanceof BehemothBomb || p instanceof VoidRift || p instanceof DecoyAfterimage) {
                 if (p.update(this, dt)) {
                     this.enemyProjectiles.splice(i, 1);
                     continue;
