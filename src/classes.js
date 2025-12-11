@@ -1939,6 +1939,14 @@ export class Breacher extends Asteroid {
              // Or just constant gravity
              this.vy += 0.1 * moveFactor; 
              
+             // Boundary Bounce (X-axis)
+             if (this.x < 0 || this.x > canvas.width) {
+                 this.vx *= -1;
+                 // Push back in
+                 if (this.x < 0) this.x = 0;
+                 if (this.x > canvas.width) this.x = canvas.width;
+             }
+
              // Rotate to face velocity
              // Note: Asteroid.draw doesn't rotate by default unless we add rotation logic.
              // We'll skip complex rotation for now.
@@ -2073,6 +2081,24 @@ export class AfterimageBoss extends Asteroid {
 
         ctx.restore();
         
+        // Health Bar
+        if (this.health > 0) {
+             const barW = 80;
+             const barH = 6;
+             const pct = Math.max(0, this.health / this.maxHealth);
+             
+             ctx.save();
+             ctx.translate(this.x, this.y);
+             ctx.fillStyle = '#333';
+             ctx.fillRect(-barW/2, -this.size - 40, barW, barH);
+             ctx.fillStyle = this.enraged ? '#ff0000' : '#00ffff';
+             ctx.fillRect(-barW/2, -this.size - 40, barW * pct, barH);
+             ctx.strokeStyle = '#fff';
+             ctx.lineWidth = 1;
+             ctx.strokeRect(-barW/2, -this.size - 40, barW, barH);
+             ctx.restore();
+        }
+
         // Lock Line
         if (this.state === 'lock') {
             ctx.save();
@@ -2216,17 +2242,35 @@ export class AfterimageBoss extends Asteroid {
                  // HIT WALL -> SHATTER
                  this.state = 'shattered';
                  this.stateTimer = 2; // 2 seconds invisible/respawning
-                 game.createExplosion(this.x, this.y, this.color, 50);
+                 
+                 const shatterX = this.x;
+                 const shatterY = this.y;
+
+                 game.createExplosion(shatterX, shatterY, this.color, 50);
+                 
+                 // Destroy Drone if exists to prevent permanent invulnerability
+                 if (this.drone && !this.drone.isDead()) {
+                     this.drone.health = 0; 
+                     this.drone = null;
+                 }
+
+                 // Move off-screen to prevent hitbox collision
+                 this.x = -1000;
+                 this.y = -1000;
+
                  game.screenShakeDuration = 20;
                  
-                 // Spawn Breachers (Shrapnel)
+                 // Spawn Breachers (Shrapnel) at SHATTER location
+                 // Fix: Ensure spawn is not too low (below kill zone)
+                 const spawnY = Math.min(shatterY, canvas.height - 30);
+
                  const count = this.enraged ? 8 : 5;
                  for (let i = 0; i < count; i++) {
                       // Fan out velocity
                       // Upwards (-y) and random x
                       const vx = (Math.random() - 0.5) * 10;
                       const vy = -(Math.random() * 5 + 10); // Shoot up
-                      game.asteroids.push(new Breacher(game, { x: this.x, y: this.y, vx, vy }));
+                      game.asteroids.push(new Breacher(game, { x: shatterX, y: spawnY, vx, vy }));
                  }
                  
                  // Chain Dash Logic (Enraged)
