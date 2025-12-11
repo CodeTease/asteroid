@@ -2143,6 +2143,11 @@ export class AfterimageBoss extends Asteroid {
         // Phase 2 Check
         if (!this.enraged && this.health < 5000) {
             this.enraged = true;
+            // Clear drone if exists
+            if (this.drone) {
+                this.drone.health = 0;
+                this.drone = null;
+            }
             game.updateGameStatus("AFTERIMAGE ENRAGED! SPEED LIMIT BROKEN!");
             audioManager.playSound('finalbossWarning');
             game.screenShakeDuration = 60;
@@ -2271,13 +2276,21 @@ export class AfterimageBoss extends Asteroid {
 
              // RICOCHET LOGIC (Enraged)
              let hitWall = false;
-             if (this.x < 0 || this.x > canvas.width) {
+             if ((this.x < 0 && this.dashVelocity.x < 0) || (this.x > canvas.width && this.dashVelocity.x > 0)) {
                  this.dashVelocity.x *= -1;
                  hitWall = true;
              }
-             if (this.y > canvas.height - this.size) {
+             if (this.y > canvas.height - this.size && this.dashVelocity.y > 0) {
                  this.dashVelocity.y *= -1; // Bounce up
                  hitWall = true;
+             }
+             
+             // Fail-safe: If stuck deep below
+             if (this.y > canvas.height + 200) {
+                 this.y = this.initialY;
+                 this.dashVelocity = { x: 0, y: 0 };
+                 this.state = 'idle';
+                 this.stateTimer = 1;
              }
 
              if (hitWall) {
