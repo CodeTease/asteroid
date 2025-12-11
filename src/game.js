@@ -1,5 +1,5 @@
 import * as UI from './ui.js';
-import { Player, Projectile, AIAlly, LaserAlly, EchoAlly, VampAlly, Coolant, Asteroid, GhostAsteroid, FinalBoss, Particle, StaticMine, BehemothTurret, BehemothBomb, Monolith, MiniBehemoth, Breacher, BrickWall } from './classes.js';
+import { Player, Projectile, AIAlly, LaserAlly, EchoAlly, VampAlly, Coolant, Asteroid, GhostAsteroid, FinalBoss, Particle, StaticMine, BehemothTurret, BehemothBomb, Monolith, MiniBehemoth, Breacher, AfterimageBoss, DefenseDrone } from './classes.js';
 import { audioManager } from './audio.js';
 import { CONFIG } from './config.js';
 import { ObjectPool } from './pool.js';
@@ -206,7 +206,7 @@ export class Game {
     
     update(dt) {
         if (!this.isGameOver) {
-             // FREEZE TIME: Stop time if Boss is Active (Monolith, Behemoth, FinalBoss, BrickWall)
+             // FREEZE TIME: Stop time if Boss is Active (Monolith, Behemoth, FinalBoss, AfterimageBoss)
              // This ensures gameplay timeline is consistent
              if (!this.isBossActive && !this.isFinalBossActive) {
                 this.gameTime += dt;
@@ -235,10 +235,10 @@ export class Game {
 
             // CRISIS EVENTS (Drift, Inversion, Chaos)
             if (this.crisisMode) {
-                 // Drift Check (Every 30s)
+                 // Drift Check (Every 30s) - Blocked by Afterimage Boss
                  if (vTime >= this.nextDriftCheck) {
                       this.nextDriftCheck += 30;
-                      if (Math.random() < 0.3) { // 30% chance
+                      if (Math.random() < 0.3 && !(this.finalBoss instanceof AfterimageBoss)) { // 30% chance
                           this.isDriftActive = true;
                           this.driftTimer = 10; // Lasts 10s? Prompt says "storm", assume duration or until event end?
                           // Let's assume duration. Or maybe it's a momentary strong push?
@@ -283,8 +283,8 @@ export class Game {
             // Darkness Event Check (Disabled during Drift)
             if (vTime >= this.nextDarknessCheck && !this.isDriftActive) {
                  this.nextDarknessCheck += 30;
-                  // Don't trigger Darkness while fighting the Monolith or BrickWall
-                  if (!(this.isFinalBossActive && (this.finalBoss instanceof Monolith || this.finalBoss instanceof BrickWall))) {
+                  // Don't trigger Darkness while fighting the Monolith or AfterimageBoss
+                  if (!(this.isFinalBossActive && (this.finalBoss instanceof Monolith || this.finalBoss instanceof AfterimageBoss))) {
                      if (Math.random() < 0.15) { // 15% chance
                          this.isDarknessActive = true;
                          this.darknessTimer = 10; // 10s duration
@@ -314,7 +314,7 @@ export class Game {
                  // 5-10% chance to happen randomly?
                  // Let's check every 5 seconds
                  if (Math.floor(this.gameTime * 10) % 50 === 0) { // roughly every 5s
-                      if (Math.random() < 0.02) { // very low chance per check to average out
+                      if (Math.random() < 0.02 && !(this.finalBoss instanceof AfterimageBoss)) { // very low chance per check to average out
                           this.isInputInverted = true;
                           this.inversionTimer = 3;
                           this.updateGameStatus("⚠️ FIELD INVERSION! CONTROLS FLIPPED! ⚠️");
@@ -322,13 +322,16 @@ export class Game {
                       }
                  }
                  
-                 // CHAOS TARGET LOCK (Every 45s)
+                 // CHAOS TARGET LOCK (Every 45s) - Blocked by Afterimage Boss
                  if (vTime >= this.nextChaosCheck) {
                       this.nextChaosCheck += 45;
                       
                       // Gather all allies (EXCEPT Echo and Vamp as per Design Doc)
-                      const allies = [...this.player.allies];
-                      if (this.laserAlly) allies.push(this.laserAlly);
+                      const allies = [];
+                      if (!(this.finalBoss instanceof AfterimageBoss)) {
+                          allies.push(...this.player.allies);
+                          if (this.laserAlly) allies.push(this.laserAlly);
+                      }
                       // Echo and Vamp allies are immune to Chaos Target Lock
                       
                       if (allies.length > 0) {
@@ -708,7 +711,7 @@ export class Game {
              audioManager.playSound('finalbossBegin'); // Reuse sound
         }
 
-        // BRICK WALL SPAWN (at 600s Void Time)
+        // AFTERIMAGE BOSS SPAWN (at 600s Void Time)
         if (this.crisisMode && this.getVoidTime() >= 600 && !this.isFinalBossActive && !this.finalBoss) {
              this.isFinalBossActive = true;
              this.isBossActive = false;
@@ -720,14 +723,14 @@ export class Game {
              this.asteroids = [];
              this.enemyProjectiles = [];
              
-             this.finalBoss = new BrickWall(this);
+             this.finalBoss = new AfterimageBoss(this);
              this.asteroids.push(this.finalBoss);
              
              UI.finalBossHealthContainer.style.display = 'block';
              UI.finalBossHealthBar.style.width = '100%';
-             UI.finalBossHealthBar.style.background = 'grey';
+             UI.finalBossHealthBar.style.background = '#00FFFF'; // Cyan
              
-             this.updateGameStatus('THE BRICK WALL HAS ARRIVED!');
+             this.updateGameStatus('AFTERIMAGE HAS ARRIVED!');
              this.screenShakeDuration = 120;
         }
 
@@ -738,18 +741,18 @@ export class Game {
                if (this.finalBoss instanceof Monolith) {
                    this.lastSpawnTime = performance.now();
                }
-               // Brick Wall Logic: Spawns NOTHING.
-               else if (this.finalBoss instanceof BrickWall) {
+               // Afterimage Logic: Spawns its own Breachers/Drones. Disable natural spawning.
+               else if (this.finalBoss instanceof AfterimageBoss) {
                    this.lastSpawnTime = performance.now();
                }
                // Behemoth (Mini-Boss) or Crisis Mode (No Boss Active)
                else if (this.behemothSpawned || this.crisisMode) {
                   const voidSpawnInterval = this.crisisMode ? 800 : 2000; // Faster in Crisis
-                  if (performance.now() - this.lastSpawnTime > voidSpawnInterval && (!this.isFinalBossActive || this.finalBoss instanceof BrickWall)) {
-                     // Wait, if BrickWall is active, we don't spawn. The condition above handles it.
+                  if (performance.now() - this.lastSpawnTime > voidSpawnInterval && (!this.isFinalBossActive || this.finalBoss instanceof AfterimageBoss)) {
+                     // Wait, if Afterimage is active, we don't spawn. The condition above handles it.
                      // But we need to ensure we spawn during Crisis if NO Boss is active.
                      
-                     if (this.isFinalBossActive) return; // Don't spawn if BrickWall is active
+                     if (this.isFinalBossActive) return; // Don't spawn if Afterimage is active
 
                      const enemyType = this.getSpawnType();
                      if (enemyType) {
@@ -921,6 +924,13 @@ export class Game {
             if (this.checkCollision(this.player, asteroid)) {
                 if (this.godMode) return; // God Mode Check
 
+                // AFTERIMAGE INSTANT KILL (Bypasses Shield)
+                if (asteroid instanceof AfterimageBoss) {
+                    this.player.shieldCharges = 0;
+                    this.handleGameOver("SHATTERED BY AFTERIMAGE!");
+                    return;
+                }
+
                 if (this.player.shieldCharges > 0) {
                     if (asteroid.isBoss) {
                         this.player.shieldCharges = 0;
@@ -978,6 +988,14 @@ export class Game {
                 if (!projectile || !asteroid) continue;
                 if (this.checkCollision(projectile, asteroid)) {
                     
+                    // AFTERIMAGE BOSS INVULNERABILITY
+                    if (asteroid instanceof AfterimageBoss && asteroid.drone && !asteroid.drone.isDead()) {
+                        this.createExplosion(projectile.x, projectile.y, 'cyan', 5);
+                        this.removeProjectile(i);
+                        hitSomething = true;
+                        break;
+                    }
+
                     // BEHEMOTH LOGIC (AI Ally Immunity)
                     if (asteroid.type === 'behemoth' && projectile.source === 'ai_ally') {
                         this.createExplosion(projectile.x, projectile.y, '#888', 5);
@@ -1098,12 +1116,14 @@ export class Game {
                      
                      // Reward?
                      this.score += 10000;
-                } else if (asteroid instanceof BrickWall) {
-                     // Placeholder Boss Defeated?
+                } else if (asteroid instanceof AfterimageBoss) {
+                     // AFTERIMAGE DEFEATED
                      audioManager.playSound('finalbossExplosion', 1.0);
                      this.isFinalBossActive = false;
                      UI.finalBossHealthContainer.style.display = 'none';
-                     this.updateGameStatus("YOU SURVIVED HELL!");
+                     this.updateGameStatus("AFTERIMAGE SHATTERED! ABYSS AWAITS...");
+                     this.score += 50000;
+                     // Logic for Abyss Mode would go here if implemented
                 }
 
                 this.createExplosion(asteroid.x, asteroid.y, asteroid.color, 400);

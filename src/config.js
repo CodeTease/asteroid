@@ -12,7 +12,7 @@ export const CONFIG = {
         VOID_MODE_START_TIME: 100, // Void Time
         BEHEMOTH_SPAWN_VOID_TIME: 150,
         MONOLITH_SPAWN_VOID_TIME: 300,
-        BRICK_WALL_SPAWN_VOID_TIME: 600,
+        AFTERIMAGE_SPAWN_VOID_TIME: 600,
     },
     PLAYER: {
         INITIAL_SIZE: 15,
@@ -55,9 +55,10 @@ export const CONFIG = {
             finalBoss: { size: 100, speed: 1.5, hp: 1000, color: '#8b0000' },
             behemoth: { size: 80, speed: 0.5, hp: 2000, color: '#800000' },
             monolith: { size: 250, speed: 0, hp: 20000, color: '#000000' },
-            brickWall: { size: 300, speed: 0, hp: 50000, color: '#696969' },
+            afterimage: { size: 40, speed: 20, hp: 15000, color: '#00FFFF' },
             
             // Summons
+            defense_drone: { size: 20, speed: 3, hp: 500, color: '#FFFFFF' },
             mini_behemoth: { size: 40, speed: 0, hp: 800, color: '#800000' },
             ghost: { size: 20, speed: 1.5, hp: 1, color: '#333333' }
         }

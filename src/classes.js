@@ -1891,13 +1891,18 @@ export class VampAlly {
 }
 
 export class Breacher extends Asteroid {
-    constructor(game) {
-        super(game, { type: 'breacher' });
+    constructor(game, options = {}) {
+        super(game, { type: 'breacher', ...options });
         this.size = 12; // Small
         this.speed = 5; // Fast
         this.health = 3; // Low HP but not one-shot
         this.color = '#FF4500'; // OrangeRed
         
+        // Physics Override for Shrapnel Mode
+        this.vx = options.vx ?? 0;
+        this.vy = options.vy ?? this.speed;
+        this.usePhysics = options.vx !== undefined || options.vy !== undefined;
+
         // Shape: Arrow/Triangle pointing down
         this.shape = [
             { x: -10, y: -10 },
@@ -1925,64 +1930,332 @@ export class Breacher extends Asteroid {
     }
 
     update(game, dt) {
-        // Breacher ignores player, rushes straight down
-        this.y += this.speed * 60 * dt;
-        
-        // Slight wiggle
-        this.x += Math.sin(this.y / 50) * 1;
+        if (this.usePhysics) {
+             const moveFactor = 60 * dt;
+             this.x += this.vx * moveFactor;
+             this.y += this.vy * moveFactor;
+             
+             // Gravity for Shrapnel Mode (if moving up initially)
+             // Or just constant gravity
+             this.vy += 0.1 * moveFactor; 
+             
+             // Rotate to face velocity
+             // Note: Asteroid.draw doesn't rotate by default unless we add rotation logic.
+             // We'll skip complex rotation for now.
+        } else {
+            // Standard Breacher behavior
+            this.y += this.speed * 60 * dt;
+            this.x += Math.sin(this.y / 50) * 1;
+        }
     }
 }
 
-export class BrickWall extends Asteroid {
-    constructor(game) {
-        super(game, { isBoss: true });
-        this.size = 300; // Massive
-        this.x = canvas.width / 2;
-        this.y = -300;
-        this.initialY = 150;
-        this.health = 50000;
-        this.maxHealth = 50000;
-        this.color = '#696969'; // DimGray
-        this.type = 'brick_wall';
-        this.state = 'enter';
+export class DefenseDrone extends Asteroid {
+    constructor(game, parent) {
+        super(game, { type: 'defense_drone', isBoss: false });
+        this.parent = parent;
+        this.angle = Math.random() * Math.PI * 2;
+        this.distance = 80;
+        this.health = 500;
+        this.maxHealth = 500;
+        this.color = '#FFFFFF';
+        this.size = 15;
+    }
+
+    update(game, dt) {
+        if (!this.parent || this.parent.health <= 0 || !game.asteroids.includes(this.parent)) {
+             this.health = 0; // Self destruct if boss gone
+             return;
+        }
+
+        const moveFactor = 60 * dt;
+        this.angle += 0.05 * moveFactor;
+        this.x = this.parent.x + Math.cos(this.angle) * this.distance;
+        this.y = this.parent.y + Math.sin(this.angle) * this.distance;
     }
 
     draw(game) {
         ctx.save();
         ctx.translate(this.x, this.y);
-        
         ctx.fillStyle = this.color;
-        ctx.shadowColor = '#000';
-        ctx.shadowBlur = 50;
-        // Big Rectangle
-        ctx.fillRect(-this.size/2, -this.size/4, this.size, this.size/2);
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = 'cyan';
         
-        // Texture/Detail
-        ctx.strokeStyle = '#333';
-        ctx.lineWidth = 4;
-        ctx.strokeRect(-this.size/2, -this.size/4, this.size, this.size/2);
+        // Draw Drone
+        ctx.beginPath();
+        ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+        ctx.fill();
         
-        // "THE WALL" Text
-        ctx.fillStyle = '#333';
-        ctx.font = '40px Impact';
-        ctx.textAlign = 'center';
-        ctx.fillText("THE WALL", 0, 15);
+        ctx.restore();
+        
+        // Link
+        if (this.parent) {
+             ctx.save();
+             ctx.strokeStyle = 'cyan';
+             ctx.lineWidth = 2;
+             ctx.setLineDash([5, 5]);
+             ctx.beginPath();
+             ctx.moveTo(this.x, this.y);
+             ctx.lineTo(this.parent.x, this.parent.y);
+             ctx.stroke();
+             ctx.restore();
+        }
+    }
+}
+
+export class AfterimageBoss extends Asteroid {
+    constructor(game) {
+        super(game, { isBoss: true });
+        this.type = 'afterimage';
+        this.size = 40;
+        this.x = canvas.width / 2;
+        this.y = -100;
+        this.initialY = 150;
+        this.health = 15000;
+        this.maxHealth = 15000;
+        this.color = '#00FFFF'; // Cyan
+        
+        this.state = 'enter'; // enter, idle, lock, dash, recover, shattered
+        this.stateTimer = 0;
+        
+        this.targetPos = { x: 0, y: 0 };
+        this.dashVelocity = { x: 0, y: 0 };
+        this.drone = null;
+        this.lastDroneSpawn = -999;
+        
+        this.enraged = false;
+        this.dashCount = 0; // For Chain Dash
+    }
+    
+    draw(game) {
+        if (this.state === 'shattered') return; // Invisible
+
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        
+        // Visuals
+        ctx.fillStyle = this.enraged ? '#FF0000' : this.color;
+        ctx.shadowColor = this.enraged ? '#FF0000' : '#00FFFF';
+        ctx.shadowBlur = 20;
+        
+        // Glitch effect
+        const shakeX = Math.random() * 4 - 2;
+        const shakeY = Math.random() * 4 - 2;
+        
+        // Diamond Shape
+        ctx.beginPath();
+        ctx.moveTo(0 + shakeX, -this.size + shakeY); // Top
+        ctx.lineTo(this.size + shakeX, 0 + shakeY); // Right
+        ctx.lineTo(0 + shakeX, this.size + shakeY); // Bottom
+        ctx.lineTo(-this.size + shakeX, 0 + shakeY); // Left
+        ctx.closePath();
+        ctx.fill();
+        
+        // Inner Eye
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(shakeX, shakeY, 10, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Invulnerable Shield
+        if (this.drone && !this.drone.isDead()) {
+             ctx.strokeStyle = 'cyan';
+             ctx.lineWidth = 3;
+             ctx.beginPath();
+             ctx.arc(0, 0, this.size + 15, 0, Math.PI * 2);
+             ctx.stroke();
+             
+             ctx.font = '20px Arial';
+             ctx.fillStyle = 'cyan';
+             ctx.textAlign = 'center';
+             ctx.fillText("🛡️ INVULNERABLE 🛡️", 0, -this.size - 20);
+        }
 
         ctx.restore();
+        
+        // Lock Line
+        if (this.state === 'lock') {
+            ctx.save();
+            ctx.strokeStyle = this.enraged ? 'red' : 'rgba(255, 0, 0, 0.5)';
+            ctx.lineWidth = this.enraged ? 4 : 2;
+            ctx.setLineDash([10, 10]);
+            ctx.beginPath();
+            ctx.moveTo(this.x, this.y);
+            ctx.lineTo(this.targetPos.x, this.targetPos.y);
+            ctx.stroke();
+            
+            // Warning Circle at target
+            ctx.beginPath();
+            ctx.arc(this.targetPos.x, this.targetPos.y, 30, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
     }
-
+    
     update(game, dt) {
+        const moveFactor = 60 * dt;
+        
+        // Phase 2 Check
+        if (!this.enraged && this.health < 5000) {
+            this.enraged = true;
+            game.updateGameStatus("AFTERIMAGE ENRAGED! SPEED LIMIT BROKEN!");
+            audioManager.playSound('finalbossWarning');
+            game.screenShakeDuration = 60;
+        }
+
         if (this.state === 'enter') {
-            this.y += 10 * dt;
+            this.y += 10 * moveFactor;
             if (this.y >= this.initialY) {
                 this.y = this.initialY;
                 this.state = 'idle';
-                game.updateGameStatus("THE WALL BLOCKADES THE PATH!");
-                game.screenShakeDuration = 60;
+                this.stateTimer = 60; // 1s wait
+                game.updateGameStatus("AFTERIMAGE: THE SHATTERED VELOCITY");
+                audioManager.playSound('finalbossBegin');
             }
+            return;
         }
         
-        // Passive. Does nothing but soak damage.
+        // Drone Spawn Logic (Phase 1 Only - Phase 2 uses Elites)
+        if (!this.enraged && (!this.drone || this.drone.health <= 0) && game.gameTime - this.lastDroneSpawn > 30) {
+             if (Math.random() < 0.01) { // Random chance each frame after cd? Better to just spawn on timer
+                  // Let's spawn immediately if off cooldown for reliability
+                  this.drone = new DefenseDrone(game, this);
+                  game.asteroids.push(this.drone);
+                  this.lastDroneSpawn = game.gameTime;
+                  game.updateGameStatus("Guardian Drone Deployed!");
+             }
+        }
+        // Phase 2 Elite Spawn handled in Game loop or here? 
+        // Spec: "Thay vì gọi Drone, gọi 1-2 Elite Minion".
+        // Let's do it here.
+        if (this.enraged && game.gameTime - this.lastDroneSpawn > 20) { // faster CD
+             // Spawn Elites
+             const types = ['juggler', 'sizzler', 'tanker'];
+             const type = types[Math.floor(Math.random() * types.length)];
+             const elite = new Asteroid(game, { type: type, isElite: true, x: Math.random() * canvas.width, y: -50 });
+             game.asteroids.push(elite);
+             this.lastDroneSpawn = game.gameTime;
+             game.updateGameStatus("Elite Reinforcements!");
+        }
+
+        if (this.state === 'idle') {
+            // Hover logic
+            this.x += Math.sin(Date.now() / 500) * 2 * moveFactor;
+            this.y = this.initialY + Math.sin(Date.now() / 300) * 10;
+            
+            this.stateTimer -= dt * 60; // Timer in frames or seconds? Let's use dt (seconds) logic
+            // Re-eval: I used 60 above thinking frames.
+            // Let's fix to seconds.
+            // stateTimer set to 60 above... 60 frames is 1s.
+            // dt is in seconds.
+            // Let's use seconds.
+            
+            if (this.stateTimer <= 0) {
+                this.state = 'lock';
+                this.stateTimer = this.enraged ? 1 : 3; // 1s vs 3s lock time
+                
+                // Lock onto player
+                if (game.player) {
+                    // Extrapolate slightly? No, spec says "vị trí hiện tại".
+                    // But maybe extend the line to the wall to show path.
+                    // Vector to player:
+                    const dx = game.player.x - this.x;
+                    const dy = game.player.y - this.y;
+                    const dist = Math.hypot(dx, dy);
+                    
+                    // Normalize and project to bottom of screen
+                    // We want to dash through the player to the wall.
+                    // If dy is negative (player above boss?), handle it.
+                    // Boss is usually at top (y=150). Player at bottom.
+                    
+                    const scale = 2000; // Far enough
+                    this.targetPos = {
+                        x: this.x + (dx / dist) * scale,
+                        y: this.y + (dy / dist) * scale
+                    };
+                    
+                    // Calculate velocity now
+                    const speed = this.enraged ? 40 : 25; // Very fast
+                    this.dashVelocity = {
+                        x: (dx / dist) * speed,
+                        y: (dy / dist) * speed
+                    };
+                }
+                audioManager.playSound('finalbossWarning');
+            }
+        } 
+        else if (this.state === 'lock') {
+             this.stateTimer -= dt;
+             // Update line endpoint? Spec says "Lock... dừng lại...". 
+             // Does the line follow the player during lock? 
+             // "Một đường kẻ hiện ra... 3s delay... Đây là lúc player phải di chuyển".
+             // Implies the line is static after locking, or follows then freezes?
+             // Usually "Lock" means it tracks then freezes.
+             // Let's make it track for first 80% then freeze.
+             // Or simpler: Lock instantly at start of state, static line. 
+             // "Lock (Khóa mục tiêu): ... Một đường kẻ hiện ra nối đến vị trí hiện tại".
+             // Let's keep it static to be dodgeable.
+             
+             if (this.stateTimer <= 0) {
+                 this.state = 'dash';
+                 audioManager.playSound('enemyShoot'); // Dash sound
+             }
+        }
+        else if (this.state === 'dash') {
+             this.x += this.dashVelocity.x * moveFactor;
+             this.y += this.dashVelocity.y * moveFactor;
+             
+             // Check Wall Collision (Bottom only? Or any wall?)
+             // Spec: "đâm vào đáy màn hình (Tường): Boss Vỡ vụn"
+             // Also check side walls to bounce? Spec says "Non-homing... Lao cực nhanh theo đường thẳng".
+             // If it hits side, it might bounce or stop.
+             // Let's assume it only shatters on Bottom or maybe sides too if aiming sideways.
+             // Let's simple check: If off screen or hit bottom.
+             
+             if (this.y > canvas.height - this.size || this.x < 0 || this.x > canvas.width) {
+                 // HIT WALL -> SHATTER
+                 this.state = 'shattered';
+                 this.stateTimer = 2; // 2 seconds invisible/respawning
+                 game.createExplosion(this.x, this.y, this.color, 50);
+                 game.screenShakeDuration = 20;
+                 
+                 // Spawn Breachers (Shrapnel)
+                 const count = this.enraged ? 8 : 5;
+                 for (let i = 0; i < count; i++) {
+                      // Fan out velocity
+                      // Upwards (-y) and random x
+                      const vx = (Math.random() - 0.5) * 10;
+                      const vy = -(Math.random() * 5 + 10); // Shoot up
+                      game.asteroids.push(new Breacher(game, { x: this.x, y: this.y, vx, vy }));
+                 }
+                 
+                 // Chain Dash Logic (Enraged)
+                 if (this.enraged) {
+                     this.dashCount++;
+                     if (this.dashCount >= 3) {
+                         this.dashCount = 0;
+                         // Full reset after 3 dashes
+                     } else {
+                         // Quick respawn for next chain
+                         this.stateTimer = 0.5; 
+                     }
+                 }
+             }
+        }
+        else if (this.state === 'shattered') {
+             this.stateTimer -= dt;
+             if (this.stateTimer <= 0) {
+                 // RESPAWN
+                 this.x = Math.random() * (canvas.width - 100) + 50;
+                 this.y = -100; // Fly in from top
+                 this.state = 'enter'; // Re-enter
+                 this.initialY = 100 + Math.random() * 100; // Vary height
+                 
+                 // Reset physics
+                 this.vx = 0; 
+                 this.vy = 0;
+             }
+        }
     }
 }
 
