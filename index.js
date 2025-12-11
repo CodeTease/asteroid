@@ -6,6 +6,7 @@ import { Game } from './src/game.js';
 import { Asteroid } from './src/classes.js';
 import * as UI from './src/ui.js';
 import { audioManager } from './src/audio.js';
+import './src/debug.js'; // Import Parasite Debug Tool
 
 window.addEventListener('DOMContentLoaded', () => {
     const game = new Game();

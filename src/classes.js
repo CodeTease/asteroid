@@ -1,6 +1,6 @@
-import { Game } from "./game.js";
 import { canvas, ctx } from "./ui.js";
 import { audioManager } from "./audio.js";
+import { CONFIG } from "./config.js";
 
 // --- GAME CLASSES ---
 
@@ -8,11 +8,11 @@ export class Player {
     constructor() {
         this.x = canvas.width / 2;
         this.y = canvas.height - 40;
-        this.size = 15;
-        this.speed = 4;
-        this.projectileSize = 5;
-        this.projectileDamage = 1;
-        this.fireRate = 1;
+        this.size = CONFIG.PLAYER.INITIAL_SIZE;
+        this.speed = CONFIG.PLAYER.INITIAL_SPEED;
+        this.projectileSize = CONFIG.PLAYER.INITIAL_PROJECTILE_SIZE;
+        this.projectileDamage = CONFIG.PLAYER.INITIAL_PROJECTILE_DAMAGE;
+        this.fireRate = CONFIG.PLAYER.INITIAL_FIRE_RATE;
         this.alpha = 1;
         this.allies = [];
         this.lastX = this.x;
@@ -22,10 +22,13 @@ export class Player {
         
         this.isStunned = false;
         this.stunTimer = 0;
+        
+        // Status Effects
+        this.isSlowed = false;
 
         // Heat System
         this.heat = 0;
-        this.maxHeat = 100;
+        this.maxHeat = CONFIG.PLAYER.MAX_HEAT;
         this.isOverheated = false;
         this.overheatTimeout = null;
     }
@@ -88,9 +91,13 @@ export class Player {
     }
 
     update(game, dt) {
-        const moveSpeed = this.speed * 60 * dt;
-        if ((game.keys['ArrowLeft'] || game.keys['a']) && this.x > this.size) this.x -= moveSpeed;
-        if ((game.keys['ArrowRight'] || game.keys['d']) && this.x < canvas.width - this.size) this.x += moveSpeed;
+        let speedMult = 1;
+        if (this.isSlowed) {
+            speedMult = 0.2; // 80% Slow
+            this.isSlowed = false; // Reset, requires continuous application
+        }
+
+        const moveSpeed = this.speed * speedMult * 60 * dt;
 
         // Apply Velocity (Juggler Push)
         if (this.vx !== 0) {
@@ -103,6 +110,22 @@ export class Player {
             if (this.x > canvas.width - this.size) this.x = canvas.width - this.size;
         }
 
+        // Field Inversion Logic
+        let leftKey = (game.keys['ArrowLeft'] || game.keys['a']);
+        let rightKey = (game.keys['ArrowRight'] || game.keys['d']);
+
+        if (game.isInputInverted) {
+            const temp = leftKey;
+            leftKey = rightKey;
+            rightKey = temp;
+            
+            // Visual cue for inversion? Maybe in Draw.
+        }
+        
+        // Override movement input
+        if (leftKey && this.x > this.size) this.x -= moveSpeed;
+        if (rightKey && this.x < canvas.width - this.size) this.x += moveSpeed;
+
         // Heat Decay
         if (!this.isOverheated && this.heat > 0) {
             // Check for Sizzler
@@ -110,9 +133,9 @@ export class Player {
             // Check for BehemothTurret
             const hasBehemoth = game.asteroids.some(a => a instanceof BehemothTurret);
 
-            let decayRate = 40;
-            if (hasSizzler) decayRate = 20;
-            if (hasBehemoth) decayRate = 10; // Behemoth significantly reduces cooling
+            let decayRate = CONFIG.PLAYER.HEAT_DECAY_RATE;
+            if (hasSizzler) decayRate = CONFIG.PLAYER.HEAT_DECAY_RATE / 2;
+            if (hasBehemoth) decayRate = CONFIG.PLAYER.HEAT_DECAY_RATE / 4; // Behemoth significantly reduces cooling
 
             this.heat -= decayRate * dt; // Decay speed
             if (this.heat < 0) this.heat = 0;
@@ -129,9 +152,9 @@ export class Player {
              // Check for BehemothTurret
             const hasBehemoth = game.asteroids.some(a => a instanceof BehemothTurret);
 
-            let heatGen = 10;
-            if (hasSizzler) heatGen = 12;
-            if (hasBehemoth) heatGen = 15; // Behemoth increases heat generation
+            let heatGen = CONFIG.PLAYER.HEAT_GENERATION;
+            if (hasSizzler) heatGen = CONFIG.PLAYER.HEAT_GENERATION * 1.2;
+            if (hasBehemoth) heatGen = CONFIG.PLAYER.HEAT_GENERATION * 1.5; // Behemoth increases heat generation
 
             this.heat += heatGen;
             if (this.heat >= this.maxHeat) {
@@ -164,14 +187,14 @@ export class Player {
 
             if (this.fireRate === 2) {
                 if (game.isAimUnlocked) {
-                    game.projectiles.push(new Projectile(originX, originY, { size: this.projectileSize, damage: this.projectileDamage, vx: vx + 1, vy: vy, source: source }));
-                    game.projectiles.push(new Projectile(originX, originY, { size: this.projectileSize, damage: this.projectileDamage, vx: vx - 1, vy: vy, source: source }));
+                    game.projectiles.push(game.projectilePool.get({ x: originX, y: originY, size: this.projectileSize, damage: this.projectileDamage, vx: vx + 1, vy: vy, source: source }));
+                    game.projectiles.push(game.projectilePool.get({ x: originX, y: originY, size: this.projectileSize, damage: this.projectileDamage, vx: vx - 1, vy: vy, source: source }));
                 } else {
-                    game.projectiles.push(new Projectile(originX - 7, originY, { size: this.projectileSize, damage: this.projectileDamage, source: source }));
-                    game.projectiles.push(new Projectile(originX + 7, originY, { size: this.projectileSize, damage: this.projectileDamage, source: source }));
+                    game.projectiles.push(game.projectilePool.get({ x: originX - 7, y: originY, size: this.projectileSize, damage: this.projectileDamage, source: source }));
+                    game.projectiles.push(game.projectilePool.get({ x: originX + 7, y: originY, size: this.projectileSize, damage: this.projectileDamage, source: source }));
                 }
             } else {
-                game.projectiles.push(new Projectile(originX, originY, { size: this.projectileSize, damage: this.projectileDamage, vx, vy, source: source }));
+                game.projectiles.push(game.projectilePool.get({ x: originX, y: originY, size: this.projectileSize, damage: this.projectileDamage, vx, vy, source: source }));
             }
         };
 
@@ -191,8 +214,12 @@ export class Player {
 
 export class Projectile {
     constructor(x, y, options = {}) {
-        this.x = x;
-        this.y = y;
+        this.reset({ x, y, ...options });
+    }
+
+    reset(options) {
+        this.x = options.x ?? 0;
+        this.y = options.y ?? 0;
         this.size = options.size ?? 5;
         this.damage = options.damage ?? 1;
         this.vx = options.vx ?? 0;
@@ -264,54 +291,57 @@ export class Asteroid {
             else this.type = 'standard';
         }
 
-        let healthMultiplier = game.gameTime >= 200 ? 2 : 1;
+        let healthMultiplier = game.gameTime >= CONFIG.ENEMIES.BASE_MULTIPLIER_TIME_THRESHOLD ? 2 : 1;
         // VOID MODE EXTENDED BUFF (Global x1.5 HP for ALL enemies after Behemoth Defeated)
         if (game.behemothDefeated) {
-            healthMultiplier *= 1.5;
+            healthMultiplier *= CONFIG.ENEMIES.VOID_MODE_HP_MULTIPLIER;
         }
 
         if (this.isElite) {
-            healthMultiplier *= 2; // Elite x2 HP
+            healthMultiplier *= CONFIG.ENEMIES.ELITE_HP_MULTIPLIER; // Elite x2 HP
         }
 
-        switch (this.type) {
-            case 'boss':
-                this.size = 60; this.speed = 0.8; this.health = options.healthOverride ?? (50 * healthMultiplier); this.color = '#ff4500';
-                break;
-            case 'orbiter': // VOID LEGION
-                this.size = 15; this.speed = 3; this.health = 3 * healthMultiplier; this.color = '#ffff00'; // Yellow
-                break;
-            case 'weaver': // VOID LEGION
-                this.size = 20; this.speed = 2; this.health = 2 * healthMultiplier; this.color = '#ff00ff'; // Magenta
-                break;
-            case 'bulwark': // VOID LEGION
-                this.size = 40; this.speed = 0.5; this.health = 10 * healthMultiplier; this.color = '#444'; // Dark Grey
-                break;
-            case 'sizzler': // NEW VOID LEGION
-                this.size = 50; this.speed = 0.5; this.health = 25 * healthMultiplier; this.color = '#ff6600'; // Orange
-                break;
-            case 'juggler': // NEW VOID LEGION
-                this.size = 25; this.speed = 2.5; this.health = 4 * healthMultiplier; this.color = '#00ff00'; // Green
-                this.pushRadius = 200;
-                break;
-            case 'anchor': // NEW VOID LEGION
-                this.size = 15; this.speed = 4; this.health = 3 * healthMultiplier; this.color = '#ffffff'; // White
-                break;
-            case 'tanker': // NEW VOID LEGION
-                this.size = 45; this.speed = 1; this.health = 30 * healthMultiplier; this.color = '#8B4513'; // SaddleBrown
-                break;
-            case 'stunner': // NEW VOID LEGION
-                this.size = 30; this.speed = 0.5; this.health = 15 * healthMultiplier; this.color = '#FFFFE0'; // LightYellow
-                break;
-            // ... (Existing types kept same) ...
-            case 'scout': this.size = 12; this.speed = Math.random() * 2 + 2.5; this.health = 1 * healthMultiplier; this.color = '#add8e6'; break;
-            case 'brute': this.size = 35; this.speed = Math.random() * 1 + 0.8; this.health = 2 * healthMultiplier; this.color = '#d2b48c'; break;
-            case 'shard': this.size = 20; this.speed = Math.random() * 1.5 + 1; this.health = 1 * healthMultiplier; this.color = '#dda0dd'; this.vx = (Math.random() - 0.5) * 2; break;
-            case 'shooter': this.size = 25; this.speed = Math.random() * 1 + 1; this.health = 2 * healthMultiplier; this.color = '#9400d3'; break;
-            case 'splitter': this.size = 30; this.speed = Math.random() * 1 + 1; this.health = 1 * healthMultiplier; this.color = '#ff8c00'; break;
-            case 'seeker': this.size = 18; this.speed = 6; this.health = 1 * healthMultiplier; this.color = '#ff3333'; if (game.player) { const dx = game.player.x - this.x; const dy = game.player.y - this.y; const dist = Math.hypot(dx, dy); this.vx = (dx / dist) * 2; } break;
-            case 'teleporter': this.size = 28; this.speed = 0.2; this.health = 3 * healthMultiplier; this.color = '#00ffcc'; this.fireCooldown = 1500; break;
-            case 'standard': default: this.size = options.size ?? (Math.random() * 20 + 15); this.speed = Math.random() * 2 + 1; this.health = 1 * healthMultiplier; this.color = '#a9a9a9'; break;
+        const stats = CONFIG.ENEMIES.STATS[this.type] || CONFIG.ENEMIES.STATS.standard;
+
+        // Apply Stats from Config (preserving existing logic for overrides and some randomness)
+        // If specific logic is needed per type (like custom movement code), it remains in update() or here.
+        
+        if (this.type === 'boss') {
+            this.size = stats.size;
+            this.speed = stats.speed;
+            this.health = options.healthOverride ?? (stats.hp * healthMultiplier);
+            this.color = stats.color;
+        } else if (this.type === 'standard') {
+             this.size = options.size ?? (Math.random() * 20 + 15);
+             this.speed = Math.random() * 2 + 1;
+             this.health = stats.hp * healthMultiplier;
+             this.color = stats.color;
+        } else if (['scout', 'brute', 'shard', 'shooter', 'splitter', 'seeker'].includes(this.type)) {
+             // Retain randomness for standard enemies
+             this.size = stats.size;
+             this.health = stats.hp * healthMultiplier;
+             this.color = stats.color;
+             
+             if (this.type === 'scout') this.speed = Math.random() * 2 + 2.5;
+             else if (this.type === 'brute') this.speed = Math.random() * 1 + 0.8;
+             else if (this.type === 'shard') { this.speed = Math.random() * 1.5 + 1; this.vx = (Math.random() - 0.5) * 2; }
+             else if (this.type === 'shooter') this.speed = Math.random() * 1 + 1;
+             else if (this.type === 'splitter') this.speed = Math.random() * 1 + 1;
+             else if (this.type === 'seeker') {
+                  this.speed = stats.speed; 
+                  if (game.player) { 
+                      const dx = game.player.x - this.x; const dy = game.player.y - this.y; const dist = Math.hypot(dx, dy); this.vx = (dx / dist) * 2; 
+                  }
+             }
+        } else {
+             // Void Legion & Others - Use Config directly
+             this.size = stats.size;
+             this.speed = stats.speed;
+             this.health = stats.hp * healthMultiplier;
+             this.color = stats.color;
+             
+             if (this.type === 'teleporter') this.fireCooldown = 1500;
+             if (this.type === 'juggler') this.pushRadius = 200;
         }
 
         this.maxHealth = this.health; // Set Max Health
@@ -666,7 +696,12 @@ export class Asteroid {
             const speed = 4;
             const vx = (dx / dist) * speed;
             const vy = (dy / dist) * speed;
-            game.enemyProjectiles.push(new Projectile(this.x, this.y, { vx, vy, color: '#ff69b4', size: 4 }));
+            // Use Pool (note: enemyProjectiles logic in Game needs to handle release too, but typically they share the pool if generic)
+            // Wait, we used 'projectilePool' in Game for PLAYER projectiles mostly? 
+            // Game.projectilePool is generic. We can use it for enemies too if we ensure release.
+            // But game.enemyProjectiles is a separate array.
+            
+            game.enemyProjectiles.push(game.projectilePool.get({ x: this.x, y: this.y, vx, vy, color: '#ff69b4', size: 4 }));
             audioManager.playSound('enemyShoot', 0.4);
             this.lastFireTime = Date.now();
         }
@@ -687,11 +722,11 @@ export class Asteroid {
                  target.stunTimer = 5; // 5 seconds
 
                  // Create Stun Beam Effect
-                 game.particles.push(new Particle(this.x, this.y, '#ffff00')); // Simple placeholder
+                 game.particles.push(game.particlePool.get({ x: this.x, y: this.y, color: '#ffff00' })); 
 
                  // Draw beam (hacky: create a fast temporary projectile or just draw in its draw method?)
                  // Let's create a special projectile that is just visual
-                 game.enemyProjectiles.push(new Projectile(this.x, this.y, { vx: 0, vy: 0, color: 'transparent', size: 0 })); // dummy
+                 game.enemyProjectiles.push(game.projectilePool.get({ x: this.x, y: this.y, vx: 0, vy: 0, color: 'transparent', size: 0 })); // dummy
                  // Actually, let's just use game.createExplosion for visual feedback on target
                  game.createExplosion(target.x, target.y, '#ffff00', 10);
                  game.updateGameStatus("Ally Stunned!");
@@ -784,13 +819,13 @@ export class BehemothTurret extends Asteroid {
                     const angleL = Math.atan2(game.player.y - (this.y + 20), game.player.x - (this.x - this.size - 10));
                     const vxL = Math.cos(angleL) * speed;
                     const vyL = Math.sin(angleL) * speed;
-                    game.enemyProjectiles.push(new Projectile(this.x - this.size - 10, this.y + 20, { vx: vxL, vy: vyL, color: 'orange', size: 6 }));
+                    game.enemyProjectiles.push(game.projectilePool.get({ x: this.x - this.size - 10, y: this.y + 20, vx: vxL, vy: vyL, color: 'orange', size: 6 }));
 
                     // Right Gun Aim
                     const angleR = Math.atan2(game.player.y - (this.y + 20), game.player.x - (this.x + this.size + 10));
                     const vxR = Math.cos(angleR) * speed;
                     const vyR = Math.sin(angleR) * speed;
-                    game.enemyProjectiles.push(new Projectile(this.x + this.size + 10, this.y + 20, { vx: vxR, vy: vyR, color: 'orange', size: 6 }));
+                    game.enemyProjectiles.push(game.projectilePool.get({ x: this.x + this.size + 10, y: this.y + 20, vx: vxR, vy: vyR, color: 'orange', size: 6 }));
                 }
             }
 
@@ -842,7 +877,8 @@ export class MiniBehemoth extends BehemothTurret {
              if (target) {
                  const angle = Math.atan2(target.y - this.y, target.x - this.x);
                  const speed = 5;
-                 game.enemyProjectiles.push(new Projectile(this.x, this.y, {
+                 game.enemyProjectiles.push(game.projectilePool.get({
+                     x: this.x, y: this.y,
                      vx: Math.cos(angle) * speed,
                      vy: Math.sin(angle) * speed,
                      color: 'orange',
@@ -1296,7 +1332,7 @@ export class FinalBoss extends Asteroid {
                     const speed = Math.random() * 2 + 3;
                     const vx = Math.cos(angle) * speed;
                     const vy = Math.sin(angle) * speed;
-                    game.enemyProjectiles.push(new Projectile(this.x, this.y, { vx, vy, color: '#ff69b4', size: 5 }));
+                    game.enemyProjectiles.push(game.projectilePool.get({ x: this.x, y: this.y, vx, vy, color: '#ff69b4', size: 5 }));
                 }
                 break;
         }
@@ -1340,6 +1376,12 @@ export class AIAlly extends Player {
         if (this.isRetreating) {
             this.y -= this.speed * 60 * dt;
             return;
+        }
+
+        // CONFUSION LOGIC
+        if (this.isConfused) {
+             this.confusedTimer -= dt;
+             if (this.confusedTimer <= 0) this.isConfused = false;
         }
 
         if (this.isStunned) {
@@ -1395,17 +1437,31 @@ export class AIAlly extends Player {
                     }
                 }
             }
-            if (bestTarget) {
+            if (this.isConfused) {
+                // Shoot Randomly
+                this.shootAt(game, null, true);
+            } else if (bestTarget) {
                 this.shootAt(game, bestTarget);
             }
             this.lastFireTime = Date.now();
         }
     }
-    shootAt(game, target) {
+    shootAt(game, target, isRandom = false) {
         audioManager.playSound('shoot', 0.2);
-        const dx = target.x - this.x;
-        const dy = target.y - this.y;
-        const dist = Math.hypot(dx, dy);
+        
+        let dx, dy, dist;
+        
+        if (isRandom) {
+             const angle = Math.random() * Math.PI * 2;
+             dx = Math.cos(angle);
+             dy = Math.sin(angle);
+             dist = 1;
+        } else {
+             dx = target.x - this.x;
+             dy = target.y - this.y;
+             dist = Math.hypot(dx, dy);
+        }
+
         const baseSpeed = 8;
         const speed = game.allyUpgrades.hasFasterProjectiles ? baseSpeed * 1.5 : baseSpeed;
         const projectileOptions = { size: this.projectileSize, damage: this.projectileDamage, source: 'ai_ally' };
@@ -1416,12 +1472,12 @@ export class AIAlly extends Player {
             const vy1 = Math.sin(angle - spread) * speed;
             const vx2 = Math.cos(angle + spread) * speed;
             const vy2 = Math.sin(angle + spread) * speed;
-            game.projectiles.push(new Projectile(this.x, this.y, { ...projectileOptions, vx: vx1, vy: vy1 }));
-            game.projectiles.push(new Projectile(this.x, this.y, { ...projectileOptions, vx: vx2, vy: vy2 }));
+            game.projectiles.push(game.projectilePool.get({ x: this.x, y: this.y, ...projectileOptions, vx: vx1, vy: vy1 }));
+            game.projectiles.push(game.projectilePool.get({ x: this.x, y: this.y, ...projectileOptions, vx: vx2, vy: vy2 }));
         } else {
             const vx = (dx / dist) * speed;
             const vy = (dy / dist) * speed;
-            game.projectiles.push(new Projectile(this.x, this.y, { ...projectileOptions, vx, vy }));
+            game.projectiles.push(game.projectilePool.get({ x: this.x, y: this.y, ...projectileOptions, vx, vy }));
         }
     }
 }
@@ -1513,6 +1569,12 @@ export class LaserAlly extends Player {
             return;
         }
 
+        // CONFUSION LOGIC
+        if (this.isConfused) {
+             this.confusedTimer -= dt;
+             if (this.confusedTimer <= 0) this.isConfused = false;
+        }
+
         if (this.isStunned) {
             this.stunTimer -= dt;
             if (this.isFiring) {
@@ -1544,6 +1606,16 @@ export class LaserAlly extends Player {
         }
         if (this.isFiring) {
             let bestTarget = null;
+            
+            if (this.isConfused) {
+                 // Target a random spot (simulating "useless target")
+                 // E.g. a point in empty space or the corner
+                 this.laserTarget = { 
+                     x: (Math.random() > 0.5 ? 0 : canvas.width), 
+                     y: canvas.height / 2 
+                 };
+                 return; // Skip normal targeting
+            }
 
             // PRIORITY TARGETING FOR LASER ALLY
             // Mini-Behemoth > Stunner > Legion Gate (Elite) > Monolith
@@ -1678,6 +1750,11 @@ export class EchoAlly {
     }
 
     update(game, dt) {
+        if (this.isConfused) {
+             this.confusedTimer -= dt;
+             if (this.confusedTimer <= 0) this.isConfused = false;
+        }
+
         if (this.isStunned) {
              this.stunTimer -= dt;
              if (this.stunTimer <= 0) this.isStunned = false;
@@ -1721,6 +1798,12 @@ export class VampAlly {
         ctx.save();
         // Visuals: Crimson red drone
         ctx.fillStyle = '#dc143c'; // Crimson
+
+        // CHAOS MODE VISUAL (Confused)
+        if (this.isConfused) {
+             ctx.shadowColor = 'purple';
+             ctx.shadowBlur = 20;
+        }
         
         // Hover effect
         const yOffset = Math.sin(this.floatTimer * 3) * 5;
@@ -1781,6 +1864,11 @@ export class VampAlly {
         if (this.isRetreating) return;
         
         this.floatTimer += dt;
+        
+        if (this.isConfused) {
+             this.confusedTimer -= dt;
+             if (this.confusedTimer <= 0) this.isConfused = false;
+        }
 
         // Auto Attack Logic
         // Target closest enemy
@@ -1795,7 +1883,11 @@ export class VampAlly {
              }
         }
 
-        if (bestTarget) {
+        if (this.isConfused) {
+             // Vamp ally does nothing or beams empty space
+             this.isFiring = false;
+             this.beamTarget = null;
+        } else if (bestTarget) {
             this.isFiring = true;
             this.beamTarget = bestTarget;
             // Siphon Damage (Low but constant)
@@ -1803,6 +1895,473 @@ export class VampAlly {
         } else {
             this.isFiring = false;
             this.beamTarget = null;
+        }
+    }
+}
+
+export class Breacher extends Asteroid {
+    constructor(game, options = {}) {
+        super(game, { type: 'breacher', ...options });
+        this.size = 12; // Small
+        this.speed = 5; // Fast
+        this.health = 3; // Low HP but not one-shot
+        this.color = '#FF4500'; // OrangeRed
+        
+        // Physics Override for Shrapnel Mode
+        this.vx = options.vx ?? 0;
+        this.vy = options.vy ?? this.speed;
+        this.usePhysics = options.vx !== undefined || options.vy !== undefined;
+
+        // Shape: Arrow/Triangle pointing down
+        this.shape = [
+            { x: -10, y: -10 },
+            { x: 10, y: -10 },
+            { x: 0, y: 15 }
+        ];
+    }
+
+    draw(game) {
+        ctx.save();
+        ctx.fillStyle = this.color;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = this.color;
+        
+        // Trail effect
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(this.x - 5, this.y - 15);
+        ctx.lineTo(this.x + 5, this.y - 15);
+        ctx.fillStyle = 'rgba(255, 69, 0, 0.5)';
+        ctx.fill();
+
+        super.draw(game);
+        ctx.restore();
+    }
+
+    update(game, dt) {
+        if (this.usePhysics) {
+             const moveFactor = 60 * dt;
+             this.x += this.vx * moveFactor;
+             this.y += this.vy * moveFactor;
+             
+             // Gravity for Shrapnel Mode (if moving up initially)
+             // Or just constant gravity
+             this.vy += 0.1 * moveFactor; 
+             
+             // Boundary Bounce (X-axis)
+             if (this.x < 0 || this.x > canvas.width) {
+                 this.vx *= -1;
+                 // Push back in
+                 if (this.x < 0) this.x = 0;
+                 if (this.x > canvas.width) this.x = canvas.width;
+             }
+
+             // Rotate to face velocity
+             // Note: Asteroid.draw doesn't rotate by default unless we add rotation logic.
+             // We'll skip complex rotation for now.
+        } else {
+            // Standard Breacher behavior
+            this.y += this.speed * 60 * dt;
+            this.x += Math.sin(this.y / 50) * 1;
+        }
+    }
+}
+
+export class DefenseDrone extends Asteroid {
+    constructor(game, parent) {
+        super(game, { type: 'defense_drone', isBoss: false });
+        this.parent = parent;
+        this.angle = Math.random() * Math.PI * 2;
+        this.distance = 80;
+        this.health = 500;
+        this.maxHealth = 500;
+        this.color = '#FFFFFF';
+        this.size = 15;
+    }
+
+    update(game, dt) {
+        if (!this.parent || this.parent.health <= 0 || !game.asteroids.includes(this.parent)) {
+             this.health = 0; // Self destruct if boss gone
+             return;
+        }
+
+        const moveFactor = 60 * dt;
+        this.angle += 0.05 * moveFactor;
+        this.x = this.parent.x + Math.cos(this.angle) * this.distance;
+        this.y = this.parent.y + Math.sin(this.angle) * this.distance;
+    }
+
+    draw(game) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.fillStyle = this.color;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = 'cyan';
+        
+        // Draw Drone
+        ctx.beginPath();
+        ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.restore();
+        
+        // Link
+        if (this.parent) {
+             ctx.save();
+             ctx.strokeStyle = 'cyan';
+             ctx.lineWidth = 2;
+             ctx.setLineDash([5, 5]);
+             ctx.beginPath();
+             ctx.moveTo(this.x, this.y);
+             ctx.lineTo(this.parent.x, this.parent.y);
+             ctx.stroke();
+             ctx.restore();
+        }
+    }
+}
+
+export class AfterimageBoss extends Asteroid {
+    constructor(game) {
+        super(game, { isBoss: true });
+        this.type = 'afterimage';
+        this.size = 40;
+        this.x = canvas.width / 2;
+        this.y = -100;
+        this.initialY = 150;
+        this.health = 15000;
+        this.maxHealth = 15000;
+        this.color = '#00FFFF'; // Cyan
+        
+        this.state = 'enter'; // enter, idle, lock, dash, recover, shattered
+        this.stateTimer = 0;
+        
+        this.targetPos = { x: 0, y: 0 };
+        this.dashVelocity = { x: 0, y: 0 };
+        this.drone = null;
+        this.lastDroneSpawn = -999;
+        
+        this.enraged = false;
+        this.dashCount = 0; // For Chain Dash
+        
+        this.trueX = this.x;
+        this.trueY = this.y;
+        this.lastRiftTime = 0;
+    }
+    
+    draw(game) {
+        if (this.state === 'shattered') return; // Invisible
+
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        
+        // Visuals
+        ctx.fillStyle = this.enraged ? '#FF0000' : this.color;
+        ctx.shadowColor = this.enraged ? '#FF0000' : '#00FFFF';
+        ctx.shadowBlur = 20;
+        
+        // Glitch effect
+        const shakeX = Math.random() * 4 - 2;
+        const shakeY = Math.random() * 4 - 2;
+        
+        // Diamond Shape
+        ctx.beginPath();
+        ctx.moveTo(0 + shakeX, -this.size + shakeY); // Top
+        ctx.lineTo(this.size + shakeX, 0 + shakeY); // Right
+        ctx.lineTo(0 + shakeX, this.size + shakeY); // Bottom
+        ctx.lineTo(-this.size + shakeX, 0 + shakeY); // Left
+        ctx.closePath();
+        ctx.fill();
+        
+        // Inner Eye
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(shakeX, shakeY, 10, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Invulnerable Shield
+        if (this.drone && !this.drone.isDead()) {
+             ctx.strokeStyle = 'cyan';
+             ctx.lineWidth = 3;
+             ctx.beginPath();
+             ctx.arc(0, 0, this.size + 15, 0, Math.PI * 2);
+             ctx.stroke();
+             
+             ctx.font = '20px Arial';
+             ctx.fillStyle = 'cyan';
+             ctx.textAlign = 'center';
+             ctx.fillText("🛡️ INVULNERABLE 🛡️", 0, -this.size - 20);
+        }
+
+        ctx.restore();
+        
+        // Health Bar
+        if (this.health > 0) {
+             const barW = 80;
+             const barH = 6;
+             const pct = Math.max(0, this.health / this.maxHealth);
+             
+             ctx.save();
+             ctx.translate(this.x, this.y);
+             ctx.fillStyle = '#333';
+             ctx.fillRect(-barW/2, -this.size - 40, barW, barH);
+             ctx.fillStyle = this.enraged ? '#ff0000' : '#00ffff';
+             ctx.fillRect(-barW/2, -this.size - 40, barW * pct, barH);
+             ctx.strokeStyle = '#fff';
+             ctx.lineWidth = 1;
+             ctx.strokeRect(-barW/2, -this.size - 40, barW, barH);
+             ctx.restore();
+        }
+
+        // Lock Line - REMOVED (No telegraphing)
+    }
+    
+    update(game, dt) {
+        const moveFactor = 60 * dt;
+        
+        // Restore True Position from Glitch Step
+        if (this.state === 'idle' || this.state === 'lock') {
+             this.x = this.trueX;
+             this.y = this.trueY;
+        }
+        
+        // Rewind State Logic
+        if (this.state === 'rewind') {
+             this.x += this.dashVelocity.x * moveFactor;
+             this.y += this.dashVelocity.y * moveFactor;
+             
+             if (this.y <= this.initialY) {
+                 this.y = this.initialY;
+                 this.state = 'idle';
+                 this.stateTimer = 1;
+                 this.vx = 0;
+                 this.vy = 0;
+                 game.updateGameStatus("REWIND COMPLETE!");
+             }
+             return;
+        }
+
+        // Phase 2 Check
+        if (!this.enraged && this.health < 5000) {
+            this.enraged = true;
+            // Clear drone if exists
+            if (this.drone) {
+                this.drone.health = 0;
+                this.drone = null;
+            }
+            game.updateGameStatus("AFTERIMAGE ENRAGED! SPEED LIMIT BROKEN!");
+            audioManager.playSound('finalbossWarning');
+            game.screenShakeDuration = 60;
+        }
+
+        if (this.state === 'enter') {
+            this.y += 10 * moveFactor;
+            if (this.y >= this.initialY) {
+                this.y = this.initialY;
+                this.state = 'idle';
+                this.stateTimer = 60; // 1s wait
+                game.updateGameStatus("AFTERIMAGE: THE SHATTERED VELOCITY");
+                audioManager.playSound('finalbossBegin');
+            }
+            return;
+        }
+        
+        // Drone Spawn Logic (Phase 1 Only - Phase 2 uses Elites)
+        if (!this.enraged && (!this.drone || this.drone.health <= 0) && game.gameTime - this.lastDroneSpawn > 30) {
+             if (Math.random() < 0.01) { // Random chance each frame after cd? Better to just spawn on timer
+                  // Let's spawn immediately if off cooldown for reliability
+                  this.drone = new DefenseDrone(game, this);
+                  game.asteroids.push(this.drone);
+                  this.lastDroneSpawn = game.gameTime;
+                  game.updateGameStatus("Guardian Drone Deployed!");
+             }
+        }
+        // Phase 2 Elite Spawn handled in Game loop or here? 
+        // Spec: "Thay vì gọi Drone, gọi 1-2 Elite Minion".
+        // Let's do it here.
+        if (this.enraged && game.gameTime - this.lastDroneSpawn > 20) { // faster CD
+             // Spawn Elites
+             const types = ['juggler', 'sizzler', 'tanker'];
+             const type = types[Math.floor(Math.random() * types.length)];
+             const elite = new Asteroid(game, { type: type, isElite: true, x: Math.random() * canvas.width, y: -50 });
+             game.asteroids.push(elite);
+             this.lastDroneSpawn = game.gameTime;
+             game.updateGameStatus("Elite Reinforcements!");
+        }
+
+        if (this.state === 'idle') {
+            // Hover logic
+            this.x += Math.sin(Date.now() / 500) * 2 * moveFactor;
+            this.y = this.initialY + Math.sin(Date.now() / 300) * 10;
+            
+            this.stateTimer -= dt * 60; // Timer in frames or seconds? Let's use dt (seconds) logic
+            // Re-eval: I used 60 above thinking frames.
+            // Let's fix to seconds.
+            // stateTimer set to 60 above... 60 frames is 1s.
+            // dt is in seconds.
+            // Let's use seconds.
+            
+            if (this.stateTimer <= 0) {
+                this.state = 'lock';
+                this.stateTimer = this.enraged ? 0.5 : 1.5; // Buffed Lock Times
+                
+                // Phantom Feint / Solid Decoys (Enraged)
+                if (this.enraged) {
+                     for(let i=0; i<2; i++) {
+                         const dx = (Math.random() - 0.5) * 300;
+                         const dy = (Math.random() - 0.5) * 100;
+                         game.asteroids.push(new SolidDecoy(game, this.x + dx, this.y + dy, this));
+                     }
+                }
+
+                // Lock onto player
+                if (game.player) {
+                    // Extrapolate slightly? No, spec says "vị trí hiện tại".
+                    // But maybe extend the line to the wall to show path.
+                    // Vector to player:
+                    const dx = game.player.x - this.x;
+                    const dy = game.player.y - this.y;
+                    const dist = Math.hypot(dx, dy);
+                    
+                    // Normalize and project to bottom of screen
+                    // We want to dash through the player to the wall.
+                    // If dy is negative (player above boss?), handle it.
+                    // Boss is usually at top (y=150). Player at bottom.
+                    
+                    const scale = 2000; // Far enough
+                    this.targetPos = {
+                        x: this.x + (dx / dist) * scale,
+                        y: this.y + (dy / dist) * scale
+                    };
+                    
+                    // Calculate velocity now
+                    const speed = this.enraged ? 40 : 25; // Very fast
+                    this.dashVelocity = {
+                        x: (dx / dist) * speed,
+                        y: (dy / dist) * speed
+                    };
+                }
+                audioManager.playSound('finalbossWarning');
+            }
+        } 
+        else if (this.state === 'lock') {
+             this.stateTimer -= dt;
+             
+             if (this.stateTimer <= 0) {
+                 // Fake Lock Chance (30%)
+                 if (this.enraged && Math.random() < 0.3) {
+                      // Fake!
+                      this.x = Math.random() * (canvas.width - 100) + 50;
+                      this.y = Math.random() * 200 + 50;
+                      this.trueX = this.x;
+                      this.trueY = this.y;
+                      this.stateTimer = 0.5; // Relock
+                      game.createExplosion(this.x, this.y, 'cyan', 10);
+                      game.updateGameStatus("FAKE OUT!");
+                 } else {
+                      this.state = 'dash';
+                      this.dashCount = 3; // Reset Bounce Count
+                      audioManager.playSound('enemyShoot'); // Dash sound
+                 }
+             }
+        }
+        else if (this.state === 'dash') {
+             this.x += this.dashVelocity.x * moveFactor;
+             this.y += this.dashVelocity.y * moveFactor;
+             
+             // Residual Void (Spawn Rifts)
+             if (performance.now() - this.lastRiftTime > 100) { // Every 100ms
+                 game.enemyProjectiles.push(new VoidRift(this.x, this.y));
+                 this.lastRiftTime = performance.now();
+             }
+
+             // RICOCHET LOGIC (Enraged)
+             let hitWall = false;
+             if ((this.x < 0 && this.dashVelocity.x < 0) || (this.x > canvas.width && this.dashVelocity.x > 0)) {
+                 this.dashVelocity.x *= -1;
+                 hitWall = true;
+             }
+             if (this.y > canvas.height - this.size && this.dashVelocity.y > 0) {
+                 this.dashVelocity.y *= -1; // Bounce up
+                 hitWall = true;
+             }
+             
+             // Fail-safe: If stuck deep below
+             if (this.y > canvas.height + 200) {
+                 this.y = this.initialY;
+                 this.dashVelocity = { x: 0, y: 0 };
+                 this.state = 'idle';
+                 this.stateTimer = 1;
+             }
+
+             if (hitWall) {
+                 game.createExplosion(this.x, this.y, 'cyan', 20);
+                 
+                 if (this.enraged && this.dashCount > 0) {
+                     this.dashCount--;
+                     // Continue Dashing
+                 } else {
+                     // SHATTER / REWIND
+                     // Check Rewind Chance (30%)
+                     if (this.enraged && Math.random() < 0.3) {
+                          this.state = 'rewind';
+                          // Velocity towards start
+                          const dx = this.initialY - this.y; // Up
+                          // Just fly straight up fast
+                          this.dashVelocity = { x: 0, y: -40 }; 
+                          game.updateGameStatus("TEMPORAL REWIND!");
+                     } else {
+                         // SHATTER
+                         this.state = 'shattered';
+                         this.stateTimer = 2; 
+                         
+                         const shatterX = this.x;
+                         const shatterY = this.y;
+
+                         game.createExplosion(shatterX, shatterY, this.color, 50);
+                         
+                         if (this.drone) { this.drone.health = 0; this.drone = null; }
+
+                         this.x = -1000;
+                         this.y = -1000;
+
+                         game.screenShakeDuration = 20;
+                         
+                         const spawnY = Math.min(shatterY, canvas.height - 30);
+                         const count = 8;
+                         for (let i = 0; i < count; i++) {
+                              const vx = (Math.random() - 0.5) * 10;
+                              const vy = -(Math.random() * 5 + 10);
+                              game.asteroids.push(new Breacher(game, { x: shatterX, y: spawnY, vx, vy }));
+                         }
+                     }
+                 }
+             }
+        }
+        else if (this.state === 'shattered') {
+             this.stateTimer -= dt;
+             if (this.stateTimer <= 0) {
+                 // RESPAWN
+                 this.x = Math.random() * (canvas.width - 100) + 50;
+                 this.y = -100; // Fly in from top
+                 this.state = 'enter'; // Re-enter
+                 this.initialY = 100 + Math.random() * 100; // Vary height
+                 
+                 // Reset physics
+                 this.vx = 0; 
+                 this.vy = 0;
+             }
+        }
+        
+        // Glitch Step (Jitter Position in Idle/Lock)
+        if (this.state === 'idle' || this.state === 'lock') {
+             this.trueX = this.x;
+             this.trueY = this.y;
+             this.x += (Math.random() - 0.5) * 40;
+             this.y += (Math.random() - 0.5) * 40;
+        } else {
+             // Ensure trueX tracks x during movement
+             this.trueX = this.x;
+             this.trueY = this.y;
         }
     }
 }
@@ -1942,12 +2501,16 @@ export class BehemothBomb {
 
 export class Particle {
     constructor(x, y, color) {
-        this.x = x;
-        this.y = y;
+        this.reset({ x, y, color });
+    }
+    
+    reset(options) {
+        this.x = options.x ?? 0;
+        this.y = options.y ?? 0;
+        this.color = options.color ?? '#fff';
         this.radius = Math.random() * 3 + 1;
         this.vx = Math.random() * 4 - 2;
         this.vy = Math.random() * 4 - 2;
-        this.color = color;
         this.maxLife = Math.random() * 40 + 20;
         this.life = this.maxLife;
     }
@@ -1967,5 +2530,127 @@ export class Particle {
         this.x += this.vx * moveFactor;
         this.y += this.vy * moveFactor;
         this.life--;
+    }
+}
+export class VoidRift {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.size = 30;
+        this.life = 2; // 2 seconds
+        this.color = '#800080'; // Purple
+        this.rotation = Math.random() * Math.PI;
+    }
+
+    draw(game) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+        ctx.globalAlpha = 0.6;
+        ctx.fillStyle = this.color;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = 'purple';
+        
+        // Rift shape
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+             ctx.rotate(Math.PI * 2 / 6);
+             ctx.lineTo(this.size, 0);
+             ctx.lineTo(this.size/3, 5);
+        }
+        ctx.fill();
+        
+        ctx.restore();
+    }
+
+    update(game, dt) {
+        this.life -= dt;
+        this.rotation += dt;
+        
+        // Slow Player
+        if (game.player && !game.player.isDestroyed) {
+            const dist = Math.hypot(game.player.x - this.x, game.player.y - this.y);
+            if (dist < this.size + game.player.size) {
+                game.player.isSlowed = true;
+            }
+        }
+
+        if (this.life <= 0) {
+            // Explode
+            game.createExplosion(this.x, this.y, 'purple', 8);
+            if (game.player && !game.player.isDestroyed) {
+                const dist = Math.hypot(game.player.x - this.x, game.player.y - this.y);
+                if (dist < 60) { // Explosion radius
+                     if (game.player.shieldCharges > 0) {
+                         game.player.shieldCharges--;
+                         game.updateGameStatus("Shield damaged by Void Rift!");
+                     } else {
+                         game.handleGameOver("Consumed by Void Rift!");
+                     }
+                }
+            }
+            return true; // Destroy
+        }
+        return false;
+    }
+}
+
+export class SolidDecoy extends Asteroid {
+    constructor(game, x, y, boss) {
+        super(game, { type: 'breacher', isBoss: false });
+        this.type = 'solid_decoy';
+        this.x = x;
+        this.y = y;
+        this.boss = boss;
+        this.color = 'rgba(0, 255, 255, 0.3)';
+        this.size = 40;
+        this.health = 30; 
+        this.maxHealth = 30;
+    }
+
+    update(game, dt) {
+        // Die if boss unavailable or shattered
+        if (!this.boss || this.boss.health <= 0 || !game.asteroids.includes(this.boss) || this.boss.state === 'shattered' || this.boss.state === 'rewind') {
+             this.health = 0;
+             game.createExplosion(this.x, this.y, this.color, 10);
+             return;
+        }
+
+        // Mirror Boss State
+        if (this.boss.state === 'dash' || this.boss.state === 'rewind') {
+             // Move parallel to boss
+             this.x += this.boss.dashVelocity.x * 60 * dt;
+             this.y += this.boss.dashVelocity.y * 60 * dt;
+        } else if (this.boss.state === 'lock') {
+             // Jitter
+             this.x += (Math.random() - 0.5) * 5;
+             this.y += (Math.random() - 0.5) * 5;
+        }
+
+        // Standard Asteroid update (collisions etc)
+        // Check bounds?
+        if (this.y > canvas.height + 50 || this.x < -50 || this.x > canvas.width + 50) {
+             this.health = 0;
+        }
+    }
+
+    draw(game) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = this.color;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = 'cyan';
+        
+        // Shape matches AfterimageBoss
+        ctx.beginPath();
+        ctx.moveTo(0, -this.size);
+        ctx.lineTo(this.size, 0);
+        ctx.lineTo(0, this.size);
+        ctx.lineTo(-this.size, 0);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.restore();
     }
 }
