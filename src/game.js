@@ -747,7 +747,7 @@ export class Game {
                }
                // Behemoth (Mini-Boss) or Crisis Mode (No Boss Active)
                else if (this.behemothSpawned || this.crisisMode) {
-                  const voidSpawnInterval = this.crisisMode ? 800 : 2000; // Faster in Crisis
+                  const voidSpawnInterval = this.crisisMode ? 1000 : 2000; // Faster in Crisis
                   if (performance.now() - this.lastSpawnTime > voidSpawnInterval && (!this.isFinalBossActive || this.finalBoss instanceof AfterimageBoss)) {
                      // Wait, if Afterimage is active, we don't spawn. The condition above handles it.
                      // But we need to ensure we spawn during Crisis if NO Boss is active.
@@ -1314,7 +1314,7 @@ export class Game {
         if (this.crisisMode) {
              this.screenShakeDuration = 20; // Stronger shake
              if (this.player && !this.isNoHeatMode) {
-                 this.player.heat += 30; // Heat penalty
+                 this.player.heat += 20; // Heat penalty (Nerfed from 30)
                  if (this.player.heat >= this.player.maxHeat) {
                       this.player.isOverheated = true;
                       this.updateGameStatus("BARRIER SHOCK: SYSTEM OVERHEAT!");

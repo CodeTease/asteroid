@@ -1891,7 +1891,29 @@ export class VampAlly {
             this.isFiring = true;
             this.beamTarget = bestTarget;
             // Siphon Damage (Low but constant)
-            bestTarget.health -= this.damage * 10 * dt; 
+            if (bestTarget.health > 0) {
+                bestTarget.health -= this.damage * 10 * dt;
+
+                // VAMP ALLY KILL EFFECT
+                if (bestTarget.health <= 0) {
+                     if (game.player) {
+                         if (bestTarget.isElite) {
+                             // Elite Kill: INSTANT RESET
+                             game.player.heat = 0;
+                             game.player.isOverheated = false;
+                             if (game.player.overheatTimeout) clearTimeout(game.player.overheatTimeout);
+                             game.updateGameStatus("VAMP: HEAT RESET!");
+                             game.createExplosion(game.player.x, game.player.y, '#00ff00', 30);
+                         } else {
+                             // Normal Kill: Reduce 30% Heat
+                             game.player.heat -= game.player.maxHeat * 0.3;
+                             if (game.player.heat < 0) game.player.heat = 0;
+                             // Visual feedback
+                             game.createExplosion(this.x, this.y, '#dc143c', 10);
+                         }
+                     }
+                }
+            }
         } else {
             this.isFiring = false;
             this.beamTarget = null;
@@ -2282,6 +2304,10 @@ export class AfterimageBoss extends Asteroid {
              }
              if (this.y > canvas.height - this.size && this.dashVelocity.y > 0) {
                  this.dashVelocity.y *= -1; // Bounce up
+                 hitWall = true;
+             }
+             if (this.y < this.size && this.dashVelocity.y < 0) {
+                 this.dashVelocity.y *= -1; // Bounce down
                  hitWall = true;
              }
              
