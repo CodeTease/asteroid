@@ -678,8 +678,8 @@ export class Game {
                     this.echoAlly = new EchoAlly();
                     this.updateGameStatus("Echo Ally Acquired!");
 
-                    if (!this.areAllUpgradesMaxed()) {
-                        this.isAutoUpgradeEnabled ? this.autoUpgradeAllies() : this.upgradeSystem.showUpgradeModal();
+                    if (!this.upgradeSystem.areAllUpgradesMaxed()) {
+                        this.isAutoUpgradeEnabled ? this.upgradeSystem.autoUpgradeAllies() : this.upgradeSystem.showUpgradeModal();
                     }
                 } else if (asteroid instanceof Monolith) {
                      // MONOLITH DEFEATED - TRIGGER CRISIS MODE
