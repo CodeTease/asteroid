@@ -1,4 +1,7 @@
-import * as GameClasses from './classes.js';
+import * as Enemies from './enemies/index.js';
+import * as Allies from './allies/index.js';
+import { Asteroid } from './enemies/basic/asteroid.js';
+const GameClasses = { ...Enemies, ...Allies };
 import { CONFIG } from './config.js';
 
 // --- STYLES ---

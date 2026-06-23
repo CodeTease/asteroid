@@ -2,11 +2,11 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import { Game } from './src/game.js';
-import { Asteroid } from './src/classes.js';
-import * as UI from './src/ui.js';
-import { audioManager } from './src/audio.js';
-import './src/debug.js'; // Import Parasite Debug Tool
+import { Game } from './core/game.js';
+import { Asteroid } from './enemies/index.js';
+import * as UI from './ui.js';
+import { audioManager } from './audio.js';
+import './debug.js'; // Import Parasite Debug Tool
 
 window.addEventListener('DOMContentLoaded', () => {
     const game = new Game();
