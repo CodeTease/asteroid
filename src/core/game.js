@@ -1,8 +1,17 @@
-import * as UI from './ui.js';
-import { Player, Projectile, AIAlly, LaserAlly, EchoAlly, VampAlly, Coolant, Asteroid, GhostAsteroid, FinalBoss, Particle, StaticMine, BehemothTurret, BehemothBomb, Monolith, MiniBehemoth, Breacher, AfterimageBoss, DefenseDrone, VoidRift, SolidDecoy } from './classes.js';
-import { audioManager } from './audio.js';
-import { CONFIG } from './config.js';
-import { ObjectPool } from './pool.js';
+import * as UI from '../ui.js';
+import { Player } from '../entities/player.js';
+import { Projectile } from '../entities/projectiles.js';
+import { Asteroid, GhostAsteroid, FinalBoss, StaticMine, BehemothTurret, BehemothBomb, Monolith, MiniBehemoth, Breacher, AfterimageBoss, DefenseDrone } from '../enemies/index.js';
+import { AIAlly, LaserAlly, EchoAlly, VampAlly, SolidDecoy } from '../allies/index.js';
+import { Coolant } from '../entities/items.js';
+import { Particle, VoidRift } from '../entities/particles.js';
+import { audioManager } from '../audio.js';
+import { CONFIG } from '../config.js';
+import { ObjectPool } from '../pool.js';
+import { Spawner } from './spawner.js';
+import { CollisionSystem } from './collisions.js';
+import { UpgradeSystem } from './upgrades.js';
+
 
 export class Game {
     constructor() {
@@ -12,6 +21,11 @@ export class Game {
         this.projectilePool = new ObjectPool(() => new Projectile(0, 0), 200);
         this.particlePool = new ObjectPool(() => new Particle(0, 0, '#fff'), 200);
         this.keys = {};
+        
+        // Subsystems
+        this.spawner = new Spawner(this);
+        this.collisionSystem = new CollisionSystem(this);
+        this.upgradeSystem = new UpgradeSystem(this);
 
         // Game State Variables
         this.player = null;
@@ -211,7 +225,7 @@ export class Game {
              if (!this.isBossActive && !this.isFinalBossActive) {
                 this.gameTime += dt;
              }
-            this.handleSpawning();
+            this.spawner.handleSpawning();
         }
 
         // VOID BARRIER CHECK (Only active AFTER Behemoth is defeated)
@@ -240,10 +254,7 @@ export class Game {
                       this.nextDriftCheck += 30;
                       if (Math.random() < 0.3 && !(this.finalBoss instanceof AfterimageBoss)) { // 30% chance
                           this.isDriftActive = true;
-                          this.driftTimer = 10; // Lasts 10s? Prompt says "storm", assume duration or until event end?
-                          // Let's assume duration. Or maybe it's a momentary strong push?
-                          // Prompt: "Cơn bão năng lượng... overlay... đẩy người chơi trôi dạt... mỗi 30s"
-                          // Let's make it last 10 seconds.
+                          this.driftTimer = 10; 
                           this.driftForce = (Math.random() > 0.5 ? 1 : -1) * 2; // Direction
                           this.updateGameStatus("⚠️ ENERGY STORM! DRIFT DETECTED! ⚠️");
                           this.isDarknessActive = false; // Disable Darkness
@@ -267,11 +278,6 @@ export class Game {
                  }
                  
                  // Field Inversion Check (Low chance)
-                 // Let's check periodically or reuse spawn timer? 
-                 // It says "5-10%". Let's check randomly every frame is bad.
-                 // Let's check every 10 seconds? Or reuse Drift timer offset?
-                 // Let's put it in handleSpawning or separate timer. 
-                 // Or just random chance every 10s.
                  if (Math.floor(vTime) % 10 === 0 && Math.random() < 0.005) { // Roughly check 
                       // Actually, let's use a dedicated timer logic
                  }
@@ -451,21 +457,6 @@ export class Game {
                      }
                      
                      if (a.isElite) {
-                         // Design says "Quái to (Tanker, Elite): -5 HP" BUT also "Elite Variants... gây x2 Sát thương lên Barrier"
-                         // This implies Elite Base Damage is high, or it doubles the base.
-                         // Let's interpret: Elite always deals significant damage. 
-                         // If it's a small elite, does it deal 1*2=2? Or 5?
-                         // "Quái to (Tanker, Elite): -5 HP" suggests Elite IS considered "Quái to".
-                         // "Effect: ... gây x2 Sát thương". 
-                         // So maybe Elite = 5 HP (base) * 2 = 10 HP? 
-                         // Or just 5HP? 
-                         // Let's go with: Base Damage (1 or 5) * 2 if Elite.
-                         // Actually "Quái to (Tanker, Elite): -5 HP" seems to define the base class.
-                         // And "Effect: ... gây x2 Sát thương" might be redundant or stacking.
-                         // Let's implement: Big=5, Small=1. If Elite, multiply by 2.
-                         
-                         // Re-eval: If a small scout is Elite, is it "Quái to"? Probably.
-                         // Let's stick to: If Elite, it hits for 10 (5*2).
                          damage = 10;
                      } else if (['tanker', 'bulwark', 'sizzler', 'behemoth', 'boss'].includes(a.type) || a.isBoss) {
                          damage = 5;
@@ -497,7 +488,7 @@ export class Game {
         }
 
         if (!this.isGameOver) {
-            this.checkCollisions();
+            this.collisionSystem.checkCollisions();
             for (let j = this.asteroids.length - 1; j >= 0; j--) {
                 const asteroid = this.asteroids[j];
                 if (asteroid.health <= 0) {
@@ -505,7 +496,7 @@ export class Game {
                 }
             }
             this.updateHUD();
-            this.checkUpgrades();
+            this.upgradeSystem.checkUpgrades();
         }
     }
 
@@ -616,446 +607,14 @@ export class Game {
         }
     }
 
-    handleSpawning() {
-        const spawnInterval = Math.max(400, 1200 - Math.floor(this.gameTime) * 10);
-        // Only spawn if no boss is active, OR if it's the Brick Wall (placeholder boss that doesn't spawn anything else)
-        if (performance.now() - this.lastSpawnTime > spawnInterval && !this.isBossActive && !this.isFinalBossActive) {
-            
-            const enemyType = this.getSpawnType();
-            if (enemyType) {
-                 // Void Mode Logic for Elite & Linked Enemies (Requires Behemoth Defeated)
-                 let isElite = false;
-                 let isLinked = false;
-                 
-                 if (this.behemothDefeated) {
-                     let eliteChance = 0.1;
-                     if (this.crisisMode) eliteChance = 0.3; // 30% in Crisis
-
-                     // Elite Chance
-                     if (Math.random() < eliteChance) isElite = true;
-
-                     // Linked Chance (Low) - Only if not Elite
-                     if (!isElite && Math.random() < 0.1) isLinked = true;
-                 }
-
-                 if (isLinked) {
-                      // Spawn Pair
-                      const x1 = Math.random() * (UI.canvas.width / 2);
-                      const x2 = x1 + 100 + Math.random() * 100; // Separation
-                      
-                      const enemy1 = new Asteroid(this, { type: enemyType, x: x1, y: -50 });
-                      const enemy2 = new Asteroid(this, { type: enemyType, x: x2, y: -50 });
-                      
-                      enemy1.partner = enemy2;
-                      enemy2.partner = enemy1;
-                      
-                      this.asteroids.push(enemy1);
-                      this.asteroids.push(enemy2);
-                      this.updateGameStatus("LINKED ENEMIES SPAWNED!");
-                 } else if (this.isDarknessActive && Math.random() < 0.7) { 
-                      // High chance for Ghost during Darkness
-                      this.asteroids.push(new GhostAsteroid(this));
-                 } else {
-                      this.asteroids.push(new Asteroid(this, { type: enemyType, isElite: isElite }));
-                      if (isElite) this.updateGameStatus("ELITE ENEMY DETECTED!");
-                 }
-            }
-            this.lastSpawnTime = performance.now();
-        }
-        
-        if (this.gameTime >= this.nextBossTime && !this.isBossActive && !this.isFinalBossActive && !this.finalBossDefeated) {
-            this.spawnBoss(false);
-            this.nextBossTime += 60;
-        }
-
-        if (this.gameTime >= 295 && !this.finalBossWarningShown && !this.finalBossDefeated) {
-            this.updateGameStatus('!!! FINAL BOSS WARNING !!!');
-            audioManager.playSound('finalbossWarning');
-            this.finalBossWarningShown = true;
-        }
-
-        if (this.gameTime >= 300 && !this.isFinalBossActive && !this.finalBoss && !this.finalBossDefeated) {
-            this.spawnBoss(true);
-        }
-
-        // VOID MODE BEHEMOTH SPAWN (at 150s Void Time)
-        if (this.finalBossDefeated && this.getVoidTime() >= 150 && !this.behemothSpawned) {
-             this.asteroids.push(new BehemothTurret(this));
-             this.behemothSpawned = true;
-             this.isBossActive = true;
-        }
-
-        // VOID MODE MONOLITH SPAWN (at 300s Void Time)
-        // Check !crisisMode to ensure we don't respawn it
-        if (this.finalBossDefeated && this.getVoidTime() >= 300 && !this.isFinalBossActive && !this.finalBoss && !this.crisisMode) {
-             // Re-using FinalBossActive flag for Monolith for HUD/Logic convenience
-             this.isFinalBossActive = true; 
-             this.isBossActive = false;
-             this.asteroids.forEach(a => {
-                 if (a.type !== 'monolith') this.createExplosion(a.x, a.y, a.color, a.size);
-             });
-             this.asteroids = []; // Clear screen
-             this.enemyProjectiles = [];
-             
-             this.finalBoss = new Monolith(this);
-             this.asteroids.push(this.finalBoss);
-             
-             UI.finalBossHealthContainer.style.display = 'block';
-             UI.finalBossHealthBar.style.width = '100%';
-             // Update Health Bar Color for Monolith
-             UI.finalBossHealthBar.style.background = 'purple';
-             
-             this.updateGameStatus('!!! MONOLITH DETECTED !!!');
-             this.screenShakeDuration = 120;
-             this.screenShakeIntensity = 4;
-             audioManager.playSound('finalbossBegin'); // Reuse sound
-        }
-
-        // AFTERIMAGE BOSS SPAWN (at 600s Void Time)
-        if (this.crisisMode && this.getVoidTime() >= 600 && !this.isFinalBossActive && !this.finalBoss) {
-             this.isFinalBossActive = true;
-             this.isBossActive = false;
-             
-             // Clear screen
-             this.asteroids.forEach(a => {
-                 this.createExplosion(a.x, a.y, a.color, a.size);
-             });
-             this.asteroids = [];
-             this.enemyProjectiles = [];
-             
-             this.finalBoss = new AfterimageBoss(this);
-             this.asteroids.push(this.finalBoss);
-             
-             UI.finalBossHealthContainer.style.display = 'block';
-             UI.finalBossHealthBar.style.width = '100%';
-             UI.finalBossHealthBar.style.background = '#00FFFF'; // Cyan
-             
-             this.updateGameStatus('AFTERIMAGE HAS ARRIVED!');
-             this.screenShakeDuration = 120;
-        }
-
-           // Override for Behemoth/Monolith/Crisis: Allow spawning even if isBossActive, but slower
-           if (this.finalBossDefeated) {
-               
-               // Monolith Logic: It spawns its own stuff (Legion Gate), so disable natural spawning
-               if (this.finalBoss instanceof Monolith) {
-                   this.lastSpawnTime = performance.now();
-               }
-               // Afterimage Logic: Spawns its own Breachers/Drones. Disable natural spawning.
-               else if (this.finalBoss instanceof AfterimageBoss) {
-                   this.lastSpawnTime = performance.now();
-               }
-               // Behemoth (Mini-Boss) or Crisis Mode (No Boss Active)
-               else if (this.behemothSpawned || this.crisisMode) {
-                  const voidSpawnInterval = this.crisisMode ? 1000 : 2000; // Faster in Crisis
-                  if (performance.now() - this.lastSpawnTime > voidSpawnInterval && (!this.isFinalBossActive || this.finalBoss instanceof AfterimageBoss)) {
-                     // Wait, if Afterimage is active, we don't spawn. The condition above handles it.
-                     // But we need to ensure we spawn during Crisis if NO Boss is active.
-                     
-                     if (this.isFinalBossActive) return; // Don't spawn if Afterimage is active
-
-                     const enemyType = this.getSpawnType();
-                     if (enemyType) {
-                         // Void Mode Logic for Elite & Linked Enemies (Requires Behemoth Defeated)
-                         let isElite = false;
-                         let isLinked = false;
-                          
-                         if (this.behemothDefeated) {
-                            let eliteChance = 0.1;
-                            if (this.crisisMode) eliteChance = 0.3;
-
-                            if (Math.random() < eliteChance) isElite = true;
-                            if (!isElite && Math.random() < 0.1) isLinked = true;
-                         }
-
-                         if (isLinked) {
-                             const x1 = Math.random() * (UI.canvas.width / 2);
-                             const x2 = x1 + 100 + Math.random() * 100;
-                             const enemy1 = new Asteroid(this, { type: enemyType, x: x1, y: -50 });
-                             const enemy2 = new Asteroid(this, { type: enemyType, x: x2, y: -50 });
-                             enemy1.partner = enemy2; enemy2.partner = enemy1;
-                             this.asteroids.push(enemy1); this.asteroids.push(enemy2);
-                         } else {
-                             this.asteroids.push(new Asteroid(this, { type: enemyType, isElite: isElite }));
-                         }
-                     }
-                     this.lastSpawnTime = performance.now();
-                  }
-               }
-           }
-    }
-
-    getSpawnType() {
-        const isVoid = this.finalBossDefeated;
-        const t = isVoid ? this.getVoidTime() : this.gameTime;
-        const weights = [];
-
-        if (!isVoid) {
-            // NORMAL MODE
-            if (t < 60) {
-                // 0-60s: Intro. Phase-in Seeker.
-                weights.push({ type: 'standard', w: 25 });
-                weights.push({ type: 'shard', w: 20 });
-                weights.push({ type: 'splitter', w: 15 });
-                weights.push({ type: 'scout', w: 15 });
-                weights.push({ type: 'brute', w: 15 });
-                weights.push({ type: 'seeker', w: 10 });
-            } else if (t < 120) {
-                // 60-120s: Projectile Pressure. Phase-in Shooter, Decrease Scout.
-                weights.push({ type: 'standard', w: 20 });
-                weights.push({ type: 'shard', w: 15 });
-                weights.push({ type: 'splitter', w: 15 });
-                weights.push({ type: 'scout', w: 5 });
-                weights.push({ type: 'brute', w: 15 });
-                weights.push({ type: 'seeker', w: 10 });
-                weights.push({ type: 'shooter', w: 20 });
-            } else if (t < 180) {
-                // 120-180s: Complexity. Phase-in Teleporter. Decrease Standard/Shard.
-                weights.push({ type: 'standard', w: 10 });
-                weights.push({ type: 'shard', w: 10 });
-                weights.push({ type: 'splitter', w: 15 });
-                weights.push({ type: 'scout', w: 5 });
-                weights.push({ type: 'brute', w: 15 });
-                weights.push({ type: 'seeker', w: 15 });
-                weights.push({ type: 'shooter', w: 20 });
-                weights.push({ type: 'teleporter', w: 10 });
-            } else {
-                // 180-300s: Pre-Boss. High Seeker/Shooter/Teleporter. Low Brute/Splitter.
-                weights.push({ type: 'standard', w: 5 });
-                weights.push({ type: 'shard', w: 5 });
-                weights.push({ type: 'splitter', w: 5 });
-                weights.push({ type: 'scout', w: 5 });
-                weights.push({ type: 'brute', w: 5 });
-                weights.push({ type: 'seeker', w: 25 });
-                weights.push({ type: 'shooter', w: 25 });
-                weights.push({ type: 'teleporter', w: 25 });
-            }
-        } else {
-            // VOID MODE
-            // Base: Orbiter, Weaver, Bulwark, Teleporter.
-            // Phase-in: Juggler, Sizzler, Anchor.
-            // Phase-out: Teleporter, Orbiter, Weaver, Bulwark.
-
-            if (t < 60) {
-                 // 0-60s V-Time: Base Void Legion.
-                 weights.push({ type: 'orbiter', w: 30 });
-                 weights.push({ type: 'weaver', w: 30 });
-                 weights.push({ type: 'bulwark', w: 30 });
-                 weights.push({ type: 'teleporter', w: 10 });
-            } else if (t < 120) {
-                 // 60-120s V-Time: Phase-in Juggler. Decrease Orbiter.
-                 weights.push({ type: 'orbiter', w: 15 });
-                 weights.push({ type: 'weaver', w: 30 });
-                 weights.push({ type: 'bulwark', w: 30 });
-                 weights.push({ type: 'teleporter', w: 10 });
-                 weights.push({ type: 'juggler', w: 15 });
-            } else if (t < 180) {
-                 // 120-180s V-Time: Phase-in Sizzler. Decrease Weaver.
-                 weights.push({ type: 'orbiter', w: 15 });
-                 weights.push({ type: 'weaver', w: 15 });
-                 weights.push({ type: 'bulwark', w: 30 });
-                 weights.push({ type: 'teleporter', w: 10 });
-                 weights.push({ type: 'juggler', w: 15 });
-                 weights.push({ type: 'sizzler', w: 15 }); // Low chance
-                 if (t >= 100) weights.push({ type: 'tanker', w: 10 }); // New Enemy (100s+)
-            } else if (t < 300) {
-                 // 180s-300s V-Time: Phase-in Anchor. Decrease Bulwark.
-                 weights.push({ type: 'orbiter', w: 15 });
-                 weights.push({ type: 'weaver', w: 15 });
-                 weights.push({ type: 'bulwark', w: 15 });
-                 weights.push({ type: 'teleporter', w: 10 });
-                 weights.push({ type: 'juggler', w: 15 });
-                 weights.push({ type: 'sizzler', w: 15 });
-                 weights.push({ type: 'anchor', w: 15 });
-                 if (t >= 100) {
-                    weights.push({ type: 'tanker', w: 15 });
-                    weights.push({ type: 'stunner', w: 15 }); // New Enemy (100s+)
-                 }
-            } else {
-                 // CRISIS MODE (300s+)
-                 // Breacher, Seeker, Stunner, Sizzler spam.
-                 weights.push({ type: 'breacher', w: 30 });
-                 weights.push({ type: 'seeker', w: 20 });
-                 weights.push({ type: 'stunner', w: 20 });
-                 weights.push({ type: 'sizzler', w: 20 });
-                 weights.push({ type: 'tanker', w: 10 });
-            }
-        }
-
-        // Weighted Random Selection
-        const totalWeight = weights.reduce((sum, item) => sum + item.w, 0);
-        let random = Math.random() * totalWeight;
-
-        for (const item of weights) {
-            random -= item.w;
-            if (random <= 0) {
-                return item.type;
-            }
-        }
-        return weights.length > 0 ? weights[0].type : 'standard';
-    }
-
-    spawnBoss(isFinal) {
-        if (isFinal) {
-            this.isFinalBossActive = true;
-            this.isBossActive = false;
-            this.asteroids.forEach(a => this.createExplosion(a.x, a.y, a.color, a.size));
-            this.asteroids = [];
-            this.enemyProjectiles = [];
-            this.finalBoss = new FinalBoss(this);
-            this.asteroids.push(this.finalBoss);
-            UI.finalBossHealthContainer.style.display = 'block';
-            this.updateGameStatus('!!! FINAL BOSS APPEARED !!!');
-            this.screenShakeDuration = 120;
-            this.screenShakeIntensity = 4;
-        } else if (!this.isBossActive && !this.isFinalBossActive) {
-            this.asteroids.push(new Asteroid(this, { isBoss: true }));
-            this.isBossActive = true;
-            this.updateGameStatus('Boss appeared!');
-        }
-    }
 
 
-    checkCollisions() {
-        // Player vs Asteroids/Enemies
-        for (let j = this.asteroids.length - 1; j >= 0; j--) {
-            if (this.isGameOver) break;
-            const asteroid = this.asteroids[j];
-            if (this.checkCollision(this.player, asteroid)) {
-                if (this.godMode) return; // God Mode Check
 
-                // AFTERIMAGE INSTANT KILL (Bypasses Shield)
-                if (asteroid instanceof AfterimageBoss) {
-                    this.player.shieldCharges = 0;
-                    this.handleGameOver("SHATTERED BY AFTERIMAGE!");
-                    return;
-                }
 
-                if (this.player.shieldCharges > 0) {
-                    if (asteroid.isBoss) {
-                        this.player.shieldCharges = 0;
-                        this.handleGameOver("Your shield was destroyed by the boss!");
-                    } else {
-                        this.player.shieldCharges--;
-                        this.createExplosion(asteroid.x, asteroid.y, '#00e5ff', 40);
-                        this.asteroids.splice(j, 1);
-                    }
-                } else {
-                    this.handleGameOver("You collided with an asteroid.");
-                }
-            }
-        }
 
-        // Player vs Enemy Projectiles
-        for (let j = this.enemyProjectiles.length - 1; j >= 0; j--) {
-            const p = this.enemyProjectiles[j];
-            if (p instanceof BehemothBomb || p instanceof VoidRift) continue; // Custom collision
 
-            if (this.checkCollision(this.player, p)) {
-                if (this.godMode) return; // God Mode Check
 
-                if (this.player.shieldCharges > 0) {
-                    this.player.shieldCharges--;
-                    this.createExplosion(p.x, p.y, '#00e5ff', 20);
-                } else {
-                    this.handleGameOver("You were hit by a projectile.");
-                }
-                this.enemyProjectiles.splice(j, 1);
-                break;
-            }
-        }
 
-        // Player vs Coolant
-        for (let j = this.coolants.length - 1; j >= 0; j--) {
-            const c = this.coolants[j];
-            if (this.checkCollision(this.player, c)) {
-                this.player.heat = 0;
-                this.player.isOverheated = false;
-                clearTimeout(this.player.overheatTimeout);
-                this.updateGameStatus("Coolant acquired! Weapon Cooled.");
-                audioManager.playSound('AIupgraded', 0.5); // Reuse sound
-                this.coolants.splice(j, 1);
-            }
-        }
-
-        // Projectiles vs Enemies
-        for (let i = this.projectiles.length - 1; i >= 0; i--) {
-            const projectile = this.projectiles[i];
-            let hitSomething = false;
-
-            for (let j = this.asteroids.length - 1; j >= 0; j--) {
-                const asteroid = this.asteroids[j];
-                if (!projectile || !asteroid) continue;
-                if (this.checkCollision(projectile, asteroid)) {
-                    
-                    // AFTERIMAGE BOSS INVULNERABILITY
-                    if (asteroid instanceof AfterimageBoss && asteroid.drone && !asteroid.drone.isDead()) {
-                        this.createExplosion(projectile.x, projectile.y, 'cyan', 5);
-                        this.removeProjectile(i);
-                        hitSomething = true;
-                        break;
-                    }
-
-                    // BEHEMOTH LOGIC (AI Ally Immunity)
-                    if (asteroid.type === 'behemoth' && projectile.source === 'ai_ally') {
-                        this.createExplosion(projectile.x, projectile.y, '#888', 5);
-                        this.removeProjectile(i);
-                        hitSomething = true;
-                        break;
-                    }
-
-                    // TANKER PARRY LOGIC (Small AI Ally projectiles)
-                    if (asteroid.type === 'tanker' && projectile.source === 'ai_ally') {
-                         this.createExplosion(projectile.x, projectile.y, '#888', 5); // Grey spark
-                         this.removeProjectile(i);
-                         hitSomething = true;
-                         break;
-                    }
-
-                    // BULWARK SHIELD LOGIC
-                    if (asteroid.type === 'bulwark') {
-                        if (this.player.y > asteroid.y) {
-                            this.createExplosion(projectile.x, projectile.y, '#00e5ff', 5);
-                            this.removeProjectile(i);
-                            hitSomething = true;
-                            break;
-                        }
-                    }
-
-                    this.createExplosion(asteroid.x, asteroid.y, asteroid.color, 5);
-
-                    let damage = projectile.damage;
-
-                    // VOID MODE GLOBAL DAMAGE BUFF (x2) - STARTS AT 100s+ (As per original Void Mode design)
-                    if (this.finalBossDefeated && this.getVoidTime() >= CONFIG.GAME.VOID_MODE_START_TIME) damage *= 2;
-
-                    // MONOLITH CUSTOM DAMAGE LOGIC
-                    if (asteroid instanceof Monolith) {
-                        const actualDamage = asteroid.takeDamage(damage, projectile.source, projectile.x, projectile.y);
-                        // Visual feedback for immunity/resist
-                        if (actualDamage === 0) {
-                             this.createExplosion(projectile.x, projectile.y, '#888', 5);
-                        } else if (actualDamage < damage) {
-                             this.createExplosion(projectile.x, projectile.y, '#purple', 5); // Resisted color
-                        }
-                    } else {
-                        asteroid.health -= damage;
-                    }
-
-                    // ANCHOR PROTECTION LOGIC
-                    if (asteroid.protectedBy && asteroid.health <= 1) {
-                         asteroid.health = 1;
-                         this.createExplosion(asteroid.x, asteroid.y, '#ffffff', 2); // White shield sparks
-                    }
-
-                    this.removeProjectile(i);
-                    hitSomething = true;
-                    break;
-                }
-            }
-            if (hitSomething) continue;
-        }
-    }
     
     removeProjectile(index) {
         const p = this.projectiles[index];
@@ -1096,8 +655,8 @@ export class Game {
                     this.echoAlly = new EchoAlly();
                     this.updateGameStatus("Echo Ally Acquired!");
 
-                    if (!this.areAllUpgradesMaxed()) {
-                        this.isAutoUpgradeEnabled ? this.autoUpgradeAllies() : this.showUpgradeModal();
+                    if (!this.upgradeSystem.areAllUpgradesMaxed()) {
+                        this.isAutoUpgradeEnabled ? this.upgradeSystem.autoUpgradeAllies() : this.upgradeSystem.showUpgradeModal();
                     }
                 } else if (asteroid instanceof Monolith) {
                      // MONOLITH DEFEATED - TRIGGER CRISIS MODE
@@ -1219,14 +778,7 @@ export class Game {
         UI.showMessage("Game Over!", `${reason} Your Score: ${this.score}`);
     }
 
-    checkCollision(obj1, obj2) {
-        if (!obj1 || !obj2 || (obj1 instanceof Player && obj1.isDestroyed)) return false;
-        const dx = obj1.x - obj2.x;
-        const dy = obj1.y - obj2.y;
-        const distance = Math.hypot(dx, dy);
-        const collisionDistance = (obj1.size + obj2.size) * 0.8;
-        return distance < collisionDistance;
-    }
+
 
     createExplosion(x, y, color, count = 20) {
         for (let i = 0; i < count; i++) {
@@ -1235,41 +787,9 @@ export class Game {
         }
     }
 
-    triggerAllyUpgradeEffect(ally) {
-        this.createExplosion(ally.x, ally.y, '#ffd700', 30);
-    }
 
-    checkUpgrades() {
-        if (this.score >= 250 && this.player.projectileSize < 7) {
-            this.player.projectileSize = 7;
-            this.player.projectileDamage = 2;
-            this.updateGameStatus('Upgrade! Larger Bullets!');
-            audioManager.playSound('Playerupgraded');
-        }
-        if (this.score >= 500 && this.player.fireRate < 2) {
-            this.player.fireRate = 2;
-            this.updateGameStatus('Upgrade! Double Shot!');
-            audioManager.playSound('Playerupgraded');
-        }
-        if (this.score >= 2000 && this.player.allies.length === 0) {
-            this.player.allies.push(new AIAlly('left'));
-            this.player.allies.push(new AIAlly('right'));
-            this.updateGameStatus('Upgrade! AI Allies!');
-            audioManager.playSound('Playerupgraded', 0.8);
-        }
-        if (this.score >= 5000 && !this.laserAlly) {
-            this.laserAlly = new LaserAlly();
-            this.laserAlly.applyUpgrades(this);
-            this.updateGameStatus('Laser Ally joined the battle!');
-            audioManager.playSound('Playerupgraded', 0.8);
-        }
-        if (this.score >= this.nextShieldScore) {
-            this.player.shieldCharges += 3;
-            this.nextShieldScore += 1500;
-            this.updateGameStatus('Shield Recharged!');
-            audioManager.playSound('Playerupgraded');
-        }
-    }
+
+
 
     updateHUD() {
         UI.scoreDisplay.innerText = `${this.score}`;
@@ -1481,70 +1001,6 @@ export class Game {
         UI.canvas.height = window.innerHeight - 50;
         if (this.player) {
             this.player.x = Math.max(this.player.size, Math.min(UI.canvas.width - this.player.size, this.player.x));
-        }
-    }
-
-    showUpgradeModal() {
-        this.isPaused = true;
-        this.updateUpgradeModalUI();
-        UI.upgradeModal.classList.add('visible');
-    }
-
-    hideUpgradeModal() {
-        UI.upgradeModal.classList.remove('visible');
-        this.isPaused = false;
-        this.lastTime = performance.now();
-        this.lastSpawnTime = performance.now();
-    }
-    
-    updateUpgradeModalUI() {
-        UI.updateUpgradeModal(this.upgradePoints, this.allyUpgrades, !!this.laserAlly);
-    }
-
-    areAllUpgradesMaxed() {
-        return this.allyUpgrades.fireRateLevel >= 5 &&
-               this.allyUpgrades.hasDoubleShot &&
-               this.allyUpgrades.hasFasterProjectiles &&
-               (!this.laserAlly || (this.allyUpgrades.laserDamageLevel >= 5 && this.allyUpgrades.laserCooldownLevel >= 5));
-    }
-    
-    autoUpgradeAllies() {
-        let upgraded = false;
-        while (this.upgradePoints > 0 && !this.areAllUpgradesMaxed()) {
-             if (this.allyUpgrades.fireRateLevel < 5 && this.upgradePoints >= 1) {
-                this.upgradeAlly('firerate'); upgraded = true;
-            } else if (!this.allyUpgrades.hasDoubleShot && this.upgradePoints >= 1) {
-                this.upgradeAlly('doubleshot'); upgraded = true;
-            } else if (!this.allyUpgrades.hasFasterProjectiles && this.upgradePoints >= 1) {
-                this.upgradeAlly('projectilespeed'); upgraded = true;
-            } else if (this.laserAlly && this.allyUpgrades.laserDamageLevel < 5 && this.upgradePoints >= 3) {
-                this.upgradeAlly('laserDamage'); upgraded = true;
-            } else if (this.laserAlly && this.allyUpgrades.laserCooldownLevel < 5 && this.upgradePoints >= 4) {
-                 this.upgradeAlly('laserCooldown'); upgraded = true;
-            } else {
-                break;
-            }
-        }
-    }
-    
-    upgradeAlly(type) {
-        let cost = 0;
-        switch (type) {
-            case 'firerate': cost = 1; if (this.allyUpgrades.fireRateLevel < 5) { this.upgradePoints -= cost; this.allyUpgrades.fireRateLevel++; } break;
-            case 'doubleshot': cost = 1; if (!this.allyUpgrades.hasDoubleShot) { this.upgradePoints -= cost; this.allyUpgrades.hasDoubleShot = true; } break;
-            case 'projectilespeed': cost = 1; if (!this.allyUpgrades.hasFasterProjectiles) { this.upgradePoints -= cost; this.allyUpgrades.hasFasterProjectiles = true; } break;
-            case 'laserDamage': cost = 3; if (this.allyUpgrades.laserDamageLevel < 5) { this.upgradePoints -= cost; this.allyUpgrades.laserDamageLevel++; } break;
-            case 'laserCooldown': cost = 4; if (this.allyUpgrades.laserCooldownLevel < 5) { this.upgradePoints -= cost; this.allyUpgrades.laserCooldownLevel++; } break;
-        }
-
-        if (cost > 0) {
-             audioManager.playSound('AIupgraded');
-        }
-
-        if (type.startsWith('laser')) {
-            if (this.laserAlly) { this.laserAlly.applyUpgrades(this); this.triggerAllyUpgradeEffect(this.laserAlly); }
-        } else {
-            this.player.allies.forEach(ally => this.triggerAllyUpgradeEffect(ally));
         }
     }
 }

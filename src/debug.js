@@ -1,4 +1,7 @@
-import * as GameClasses from './classes.js';
+import * as Enemies from './enemies/index.js';
+import * as Allies from './allies/index.js';
+import { Asteroid } from './enemies/basic/asteroid.js';
+const GameClasses = { ...Enemies, ...Allies };
 import { CONFIG } from './config.js';
 
 // --- STYLES ---
@@ -203,7 +206,7 @@ class DebugTool {
              } else {
                  // Trigger upgrades that add allies
                  this.game.score = 5000;
-                 this.game.checkUpgrades(); // Should re-add logic
+                 this.game.upgradeSystem.checkUpgrades(); // Should re-add logic
                  this.game.updateGameStatus("Allies Toggled (Simulated)");
              }
         });
@@ -311,14 +314,14 @@ class DebugTool {
         
         // Boss Force
         this.createButton(mod, 'Force Boss', () => {
-             if(this.game) this.game.spawnBoss(true);
+             if(this.game) this.game.spawner.spawnBoss(true);
         });
         
         // Horde
         this.createButton(mod, 'Horde (10x)', () => {
              if (!this.game) return;
              for(let i=0; i<10; i++) {
-                 this.game.handleSpawning(); // Force spawn logic or random
+                 this.game.spawner.handleSpawning(); // Force spawn logic or random
                  this.game.asteroids.push(new Asteroid(this.game)); // Random
              }
         });
@@ -494,8 +497,8 @@ class DebugTool {
         };
 
         // 2. Hook CheckCollision for God Mode & One Shot
-        const originalCheckCollision = this.game.checkCollision.bind(this.game);
-        this.game.checkCollision = (obj1, obj2) => {
+        const originalCheckCollision = this.game.collisionSystem.checkCollision.bind(this.game.collisionSystem);
+        this.game.collisionSystem.checkCollision = (obj1, obj2) => {
             if (this.state.godMode) {
                 if (obj1 === this.game.player || obj2 === this.game.player) return false;
             }

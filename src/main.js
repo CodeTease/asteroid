@@ -2,11 +2,11 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import { Game } from './src/game.js';
-import { Asteroid } from './src/classes.js';
-import * as UI from './src/ui.js';
-import { audioManager } from './src/audio.js';
-import './src/debug.js'; // Import Parasite Debug Tool
+import { Game } from './core/game.js';
+import { Asteroid } from './enemies/index.js';
+import * as UI from './ui.js';
+import { audioManager } from './audio.js';
+import './debug.js'; // Import Parasite Debug Tool
 
 window.addEventListener('DOMContentLoaded', () => {
     const game = new Game();
@@ -143,26 +143,26 @@ window.addEventListener('DOMContentLoaded', () => {
     });
     
     // Upgrade Modal Logic
-    UI.continueButton.addEventListener('click', () => game.hideUpgradeModal());
+    UI.continueButton.addEventListener('click', () => game.upgradeSystem.hideUpgradeModal());
     UI.upgradeFirerateBtn.addEventListener('click', () => {
-        game.upgradeAlly('firerate');
-        game.updateUpgradeModalUI();
+        game.upgradeSystem.upgradeAlly('firerate');
+        game.upgradeSystem.updateUpgradeModalUI();
     });
     UI.upgradeDoubleshotBtn.addEventListener('click', () => {
-        game.upgradeAlly('doubleshot');
-        game.updateUpgradeModalUI();
+        game.upgradeSystem.upgradeAlly('doubleshot');
+        game.upgradeSystem.updateUpgradeModalUI();
     });
     UI.upgradeProjectilespeedBtn.addEventListener('click', () => {
-        game.upgradeAlly('projectilespeed');
-        game.updateUpgradeModalUI();
+        game.upgradeSystem.upgradeAlly('projectilespeed');
+        game.upgradeSystem.updateUpgradeModalUI();
     });
     UI.upgradeLaserDamageBtn.addEventListener('click', () => {
-        game.upgradeAlly('laserDamage');
-        game.updateUpgradeModalUI();
+        game.upgradeSystem.upgradeAlly('laserDamage');
+        game.upgradeSystem.updateUpgradeModalUI();
     });
     UI.upgradeLaserCooldownBtn.addEventListener('click', () => {
-        game.upgradeAlly('laserCooldown');
-        game.updateUpgradeModalUI();
+        game.upgradeSystem.upgradeAlly('laserCooldown');
+        game.upgradeSystem.updateUpgradeModalUI();
     });
     UI.autoUpgradeCheckbox.addEventListener('change', () => {
         game.isAutoUpgradeEnabled = UI.autoUpgradeCheckbox.checked;
@@ -206,7 +206,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
     debugSummonBoss.addEventListener('click', () => {
         if (!game.isFinalBossActive) {
-            game.spawnBoss(true);
+            game.spawner.spawnBoss(true);
         }
     });
 
