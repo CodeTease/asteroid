@@ -497,8 +497,8 @@ class DebugTool {
         };
 
         // 2. Hook CheckCollision for God Mode & One Shot
-        const originalCheckCollision = this.game.checkCollision.bind(this.game);
-        this.game.checkCollision = (obj1, obj2) => {
+        const originalCheckCollision = this.game.collisionSystem.checkCollision.bind(this.game.collisionSystem);
+        this.game.collisionSystem.checkCollision = (obj1, obj2) => {
             if (this.state.godMode) {
                 if (obj1 === this.game.player || obj2 === this.game.player) return false;
             }

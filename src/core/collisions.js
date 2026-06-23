@@ -2,6 +2,9 @@
 import * as UI from '../ui.js';
 import { audioManager } from '../audio.js';
 import { CONFIG } from '../config.js';
+import { Player } from '../entities/player.js';
+import { AfterimageBoss, Monolith, BehemothBomb } from '../enemies/index.js';
+import { VoidRift } from '../entities/particles.js';
 
 export class CollisionSystem {
     constructor(game) {

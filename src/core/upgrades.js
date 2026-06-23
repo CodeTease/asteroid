@@ -2,6 +2,7 @@
 import * as UI from '../ui.js';
 import { audioManager } from '../audio.js';
 import { CONFIG } from '../config.js';
+import { AIAlly, LaserAlly } from '../allies/index.js';
 
 export class UpgradeSystem {
     constructor(game) {
