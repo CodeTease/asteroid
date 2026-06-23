@@ -14,8 +14,8 @@ export class AfterimageBoss extends Asteroid {
         this.x = canvas.width / 2;
         this.y = -100;
         this.initialY = 150;
-        this.health = 15000;
-        this.maxHealth = 15000;
+        this.health = 10000;
+        this.maxHealth = 10000;
         this.color = '#00FFFF'; // Cyan
         
         this.state = 'enter'; // enter, idle, lock, dash, recover, shattered
@@ -80,23 +80,7 @@ export class AfterimageBoss extends Asteroid {
 
         ctx.restore();
         
-        // Health Bar
-        if (this.health > 0) {
-             const barW = 80;
-             const barH = 6;
-             const pct = Math.max(0, this.health / this.maxHealth);
-             
-             ctx.save();
-             ctx.translate(this.x, this.y);
-             ctx.fillStyle = '#333';
-             ctx.fillRect(-barW/2, -this.size - 40, barW, barH);
-             ctx.fillStyle = this.enraged ? '#ff0000' : '#00ffff';
-             ctx.fillRect(-barW/2, -this.size - 40, barW * pct, barH);
-             ctx.strokeStyle = '#fff';
-             ctx.lineWidth = 1;
-             ctx.strokeRect(-barW/2, -this.size - 40, barW, barH);
-             ctx.restore();
-        }
+        // Health Bar removed – displayed on game UI instead
 
         // Lock Line - REMOVED (No telegraphing)
     }
@@ -127,7 +111,7 @@ export class AfterimageBoss extends Asteroid {
         }
 
         // Phase 2 Check
-        if (!this.enraged && this.health < 5000) {
+        if (!this.enraged && this.health < 3000) {
             this.enraged = true;
             // Clear drone if exists
             if (this.drone) {
@@ -183,12 +167,13 @@ export class AfterimageBoss extends Asteroid {
                 this.state = 'lock';
                 this.stateTimer = this.enraged ? 0.5 : 1.5; // Buffed Lock Times
                 
-                // Phantom Feint / Solid Decoys (Enraged)
-                if (this.enraged) {
+                // Phantom Feint / Solid Decoys (Enraged) – 40% chance per lock
+                if (this.enraged && Math.random() < 0.4) {
                      for(let i=0; i<2; i++) {
-                         const dx = (Math.random() - 0.5) * 300;
-                         const dy = (Math.random() - 0.5) * 100;
-                         game.asteroids.push(new SolidDecoy(game, this.x + dx, this.y + dy, this));
+                         const margin = 60;
+                         const spawnX = margin + Math.random() * (canvas.width - margin * 2);
+                         const spawnY = this.y + (Math.random() - 0.5) * 200;
+                         game.asteroids.push(new SolidDecoy(game, spawnX, spawnY, this));
                      }
                 }
 

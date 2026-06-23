@@ -10,7 +10,8 @@ export class SolidDecoy extends Asteroid {
         this.x = x;
         this.y = y;
         this.boss = boss;
-        this.color = 'rgba(0, 255, 255, 0.3)';
+        // Sync color with boss enraged state
+        this.color = (boss && boss.enraged) ? '#FF0000' : 'rgba(0, 255, 255, 0.3)';
         this.size = 40;
         this.health = 30; 
         this.maxHealth = 30;
@@ -43,20 +44,30 @@ export class SolidDecoy extends Asteroid {
     }
 
     draw(game) {
+        // Glitch shake – matches Boss visual
+        const shakeX = Math.random() * 4 - 2;
+        const shakeY = Math.random() * 4 - 2;
+
         ctx.save();
         ctx.translate(this.x, this.y);
-        ctx.globalAlpha = 0.5;
+        // No globalAlpha – fully opaque like Boss
         ctx.fillStyle = this.color;
         ctx.shadowBlur = 10;
-        ctx.shadowColor = 'cyan';
+        ctx.shadowColor = (this.boss && this.boss.enraged) ? '#FF0000' : 'cyan';
         
-        // Shape matches AfterimageBoss
+        // Shape matches AfterimageBoss (with glitch offset)
         ctx.beginPath();
-        ctx.moveTo(0, -this.size);
-        ctx.lineTo(this.size, 0);
-        ctx.lineTo(0, this.size);
-        ctx.lineTo(-this.size, 0);
+        ctx.moveTo(0 + shakeX, -this.size + shakeY);
+        ctx.lineTo(this.size + shakeX, 0 + shakeY);
+        ctx.lineTo(0 + shakeX, this.size + shakeY);
+        ctx.lineTo(-this.size + shakeX, 0 + shakeY);
         ctx.closePath();
+        ctx.fill();
+
+        // Inner Eye (matching Boss)
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(shakeX, shakeY, 10, 0, Math.PI * 2);
         ctx.fill();
         
         ctx.restore();
