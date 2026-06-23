@@ -254,10 +254,7 @@ export class Game {
                       this.nextDriftCheck += 30;
                       if (Math.random() < 0.3 && !(this.finalBoss instanceof AfterimageBoss)) { // 30% chance
                           this.isDriftActive = true;
-                          this.driftTimer = 10; // Lasts 10s? Prompt says "storm", assume duration or until event end?
-                          // Let's assume duration. Or maybe it's a momentary strong push?
-                          // Prompt: "Cơn bão năng lượng... overlay... đẩy người chơi trôi dạt... mỗi 30s"
-                          // Let's make it last 10 seconds.
+                          this.driftTimer = 10; 
                           this.driftForce = (Math.random() > 0.5 ? 1 : -1) * 2; // Direction
                           this.updateGameStatus("⚠️ ENERGY STORM! DRIFT DETECTED! ⚠️");
                           this.isDarknessActive = false; // Disable Darkness
@@ -281,11 +278,6 @@ export class Game {
                  }
                  
                  // Field Inversion Check (Low chance)
-                 // Let's check periodically or reuse spawn timer? 
-                 // It says "5-10%". Let's check randomly every frame is bad.
-                 // Let's check every 10 seconds? Or reuse Drift timer offset?
-                 // Let's put it in handleSpawning or separate timer. 
-                 // Or just random chance every 10s.
                  if (Math.floor(vTime) % 10 === 0 && Math.random() < 0.005) { // Roughly check 
                       // Actually, let's use a dedicated timer logic
                  }
@@ -465,21 +457,6 @@ export class Game {
                      }
                      
                      if (a.isElite) {
-                         // Design says "Quái to (Tanker, Elite): -5 HP" BUT also "Elite Variants... gây x2 Sát thương lên Barrier"
-                         // This implies Elite Base Damage is high, or it doubles the base.
-                         // Let's interpret: Elite always deals significant damage. 
-                         // If it's a small elite, does it deal 1*2=2? Or 5?
-                         // "Quái to (Tanker, Elite): -5 HP" suggests Elite IS considered "Quái to".
-                         // "Effect: ... gây x2 Sát thương". 
-                         // So maybe Elite = 5 HP (base) * 2 = 10 HP? 
-                         // Or just 5HP? 
-                         // Let's go with: Base Damage (1 or 5) * 2 if Elite.
-                         // Actually "Quái to (Tanker, Elite): -5 HP" seems to define the base class.
-                         // And "Effect: ... gây x2 Sát thương" might be redundant or stacking.
-                         // Let's implement: Big=5, Small=1. If Elite, multiply by 2.
-                         
-                         // Re-eval: If a small scout is Elite, is it "Quái to"? Probably.
-                         // Let's stick to: If Elite, it hits for 10 (5*2).
                          damage = 10;
                      } else if (['tanker', 'bulwark', 'sizzler', 'behemoth', 'boss'].includes(a.type) || a.isBoss) {
                          damage = 5;
@@ -1026,16 +1003,4 @@ export class Game {
             this.player.x = Math.max(this.player.size, Math.min(UI.canvas.width - this.player.size, this.player.x));
         }
     }
-
-
-
-
-    
-
-
-
-    
-
-    
-
 }

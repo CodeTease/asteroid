@@ -29,7 +29,7 @@ export class UpgradeSystem {
         }
         if (this.game.score >= 5000 && !this.game.laserAlly) {
             this.game.laserAlly = new LaserAlly();
-            this.game.laserAlly.applyUpgrades(this);
+            this.game.laserAlly.applyUpgrades(this.game);
             this.game.updateGameStatus('Laser Ally joined the battle!');
             audioManager.playSound('Playerupgraded', 0.8);
         }
@@ -103,7 +103,7 @@ export class UpgradeSystem {
         }
 
         if (type.startsWith('laser')) {
-            if (this.game.laserAlly) { this.game.laserAlly.applyUpgrades(this); this.triggerAllyUpgradeEffect(this.game.laserAlly); }
+            if (this.game.laserAlly) { this.game.laserAlly.applyUpgrades(this.game); this.triggerAllyUpgradeEffect(this.game.laserAlly); }
         } else {
             this.game.player.allies.forEach(ally => this.triggerAllyUpgradeEffect(ally));
         }

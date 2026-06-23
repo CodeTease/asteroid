@@ -2,6 +2,9 @@ import { canvas, ctx } from "../../ui.js";
 import { audioManager } from "../../audio.js";
 import { CONFIG } from "../../config.js";
 import { Asteroid } from '../basic/asteroid.js';
+import { DefenseDrone, Breacher } from '../index.js';
+import { VoidRift } from '../../entities/particles.js';
+import { SolidDecoy } from '../../allies/solid-decoy.js';
 
 export class AfterimageBoss extends Asteroid {
     constructor(game) {
@@ -159,8 +162,6 @@ export class AfterimageBoss extends Asteroid {
              }
         }
         // Phase 2 Elite Spawn handled in Game loop or here? 
-        // Spec: "Thay vì gọi Drone, gọi 1-2 Elite Minion".
-        // Let's do it here.
         if (this.enraged && game.gameTime - this.lastDroneSpawn > 20) { // faster CD
              // Spawn Elites
              const types = ['juggler', 'sizzler', 'tanker'];
@@ -177,11 +178,6 @@ export class AfterimageBoss extends Asteroid {
             this.y = this.initialY + Math.sin(Date.now() / 300) * 10;
             
             this.stateTimer -= dt * 60; // Timer in frames or seconds? Let's use dt (seconds) logic
-            // Re-eval: I used 60 above thinking frames.
-            // Let's fix to seconds.
-            // stateTimer set to 60 above... 60 frames is 1s.
-            // dt is in seconds.
-            // Let's use seconds.
             
             if (this.stateTimer <= 0) {
                 this.state = 'lock';
@@ -198,9 +194,6 @@ export class AfterimageBoss extends Asteroid {
 
                 // Lock onto player
                 if (game.player) {
-                    // Extrapolate slightly? No, spec says "vị trí hiện tại".
-                    // But maybe extend the line to the wall to show path.
-                    // Vector to player:
                     const dx = game.player.x - this.x;
                     const dy = game.player.y - this.y;
                     const dist = Math.hypot(dx, dy);

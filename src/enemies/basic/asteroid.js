@@ -1,6 +1,7 @@
 import { canvas, ctx } from "../../ui.js";
 import { audioManager } from "../../audio.js";
 import { CONFIG } from "../../config.js";
+import { StaticMine } from "./static-mine.js";
 
 export class Asteroid {
     constructor(game, options = {}) {
@@ -281,7 +282,6 @@ export class Asteroid {
         if (this.isEnraged) {
              // Override standard movement patterns
              this.y += this.speed * moveFactor;
-             // Simple seek X if needed, but spec says "lao thẳng xuống đáy" (rush straight down)
              // Let's make it rush down but slightly towards player for lethality
              if (game.player) {
                   const dx = game.player.x - this.x;

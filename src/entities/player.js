@@ -1,6 +1,7 @@
 import { canvas, ctx } from "../ui.js";
 import { audioManager } from "../audio.js";
 import { CONFIG } from "../config.js";
+import { BehemothTurret } from "../enemies/bosses/behemoth.js";
 
 export class Player {
     constructor() {
