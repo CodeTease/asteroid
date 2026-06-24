@@ -11,18 +11,18 @@ Follow these steps to set up the project locally:
 
 1.  **Clone the repository:**
     ```bash
-    git clone <repository-url>
-    cd asteroid-destroyer
+    git clone https://github.com/CodeTease/asteroid
+    cd asteroid
     ```
 
 2.  **Install dependencies:**
     ```bash
-    npm install
+    bun install
     ```
 
 3.  **Run the development server:**
     ```bash
-    npm run dev
+    bun run dev
     ```
 
 4.  **Open the game:**
