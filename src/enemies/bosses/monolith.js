@@ -2,6 +2,7 @@ import { canvas, ctx } from "../../ui.js";
 import { audioManager } from "../../audio.js";
 import { CONFIG } from "../../config.js";
 import { Asteroid } from '../basic/asteroid.js';
+import { MiniBehemoth } from './behemoth.js';
 
 export class Monolith extends Asteroid {
     constructor(game) {

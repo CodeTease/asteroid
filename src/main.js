@@ -80,7 +80,17 @@ window.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    window.addEventListener('keydown', (e) => { game.keys[e.key] = true; });
+    window.addEventListener('keydown', (e) => {
+        game.keys[e.key] = true;
+        if ((e.key === 'u' || e.key === 'U') && game.player && !game.isGameOver) {
+            const isModalOpen = UI.upgradeModal.classList.contains('visible');
+            if (isModalOpen) {
+                game.upgradeSystem.hideUpgradeModal();
+            } else {
+                game.upgradeSystem.showUpgradeModal();
+            }
+        }
+    });
     window.addEventListener('keyup', (e) => { game.keys[e.key] = false; });
 
     let shootInterval = null;

@@ -63,7 +63,7 @@ export class DestructionHandler {
                      game.ui.hideFinalBossHealth();
                      game.ui.updateGameStatus("AFTERIMAGE SHATTERED! ABYSS AWAITS...");
                      game.score += 50000;
-                     // Logic for Abyss Mode would go here if implemented
+                     // Logic for Abyss Mode would go here (soon)
                 }
 
                 game.createExplosion(asteroid.x, asteroid.y, asteroid.color, 400);

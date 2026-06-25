@@ -70,21 +70,35 @@ export class UpgradeSystem {
     }
 
     autoUpgradeAllies() {
-        let upgraded = false;
-        while (this.game.upgradePoints > 0 && !this.areAllUpgradesMaxed()) {
-             if (this.game.allyUpgrades.fireRateLevel < 5 && this.game.upgradePoints >= 1) {
-                this.upgradeAlly('firerate'); upgraded = true;
-            } else if (!this.game.allyUpgrades.hasDoubleShot && this.game.upgradePoints >= 1) {
-                this.upgradeAlly('doubleshot'); upgraded = true;
-            } else if (!this.game.allyUpgrades.hasFasterProjectiles && this.game.upgradePoints >= 1) {
-                this.upgradeAlly('projectilespeed'); upgraded = true;
-            } else if (this.game.laserAlly && this.game.allyUpgrades.laserDamageLevel < 5 && this.game.upgradePoints >= 3) {
-                this.upgradeAlly('laserDamage'); upgraded = true;
-            } else if (this.game.laserAlly && this.game.allyUpgrades.laserCooldownLevel < 5 && this.game.upgradePoints >= 4) {
-                 this.upgradeAlly('laserCooldown'); upgraded = true;
-            } else {
+        while (true) {
+            const validUpgrades = [];
+
+            // Evaluate valid upgrades and assign priorities (lower number = higher priority)
+            if (this.game.laserAlly && this.game.allyUpgrades.laserCooldownLevel < 5 && this.game.upgradePoints >= 4) {
+                validUpgrades.push({ type: 'laserCooldown', priority: 1 });
+            }
+            if (this.game.laserAlly && this.game.allyUpgrades.laserDamageLevel < 5 && this.game.upgradePoints >= 3) {
+                validUpgrades.push({ type: 'laserDamage', priority: 2 });
+            }
+            if (this.game.allyUpgrades.fireRateLevel < 5 && this.game.upgradePoints >= 1) {
+                validUpgrades.push({ type: 'firerate', priority: 3 });
+            }
+            if (!this.game.allyUpgrades.hasDoubleShot && this.game.upgradePoints >= 1) {
+                validUpgrades.push({ type: 'doubleshot', priority: 4 });
+            }
+            if (!this.game.allyUpgrades.hasFasterProjectiles && this.game.upgradePoints >= 1) {
+                validUpgrades.push({ type: 'projectilespeed', priority: 5 });
+            }
+
+            if (validUpgrades.length === 0) {
                 break;
             }
+
+            // Sort by priority ascending (highest priority first)
+            validUpgrades.sort((a, b) => a.priority - b.priority);
+
+            // Execute the highest priority upgrade
+            this.upgradeAlly(validUpgrades[0].type);
         }
     }
 
