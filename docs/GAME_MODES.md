@@ -22,7 +22,9 @@ Upon entering the Void, the visual theme shifts, and a new timer ("Void Time") b
 
 *   **Duration:** 0 to 150 seconds (Void Time).
 *   **Key Features:**
-    *   **Void Skills:** Upon entry, players select one of three powerful skills (No Heat, Permanent Echo, Ultimate Barrage).
+    *   **Aim Mode:** Full 360-degree aiming is unlocked.
+    *   **Void Damage Buff:** After 100 seconds, player damage is doubled globally.
+    *   **Void Skills:** After 100 seconds, players select one of three powerful skills (No Heat, Permanent Echo, Ultimate Barrage).
     *   **New Enemies:** Introduction of the Void Legion (Orbiters, Weavers, Bulwarks).
 *   **Objective:** Survive and progress to summon the **Behemoth** at 150s Void Time.
 
@@ -58,5 +60,5 @@ Known as "Five Minutes of Hell", this is the ultimate survival challenge. The ga
         *   *Drift:* Forced player movement, making precision difficult.
         *   *Field Inversion:* Controls are reversed.
         *   *Chaos Target Lock:* Allies become confused and may target erratically.
-    *   **New Enemies:** Breachers (fast, anti-barrier units) and Brick Walls (massive passive blockers).
+    *   **New Enemies:** Breachers (fast, anti-barrier units).
 *   **Objective:** Survive the chaos to face the final challenge: the **Afterimage Boss**.

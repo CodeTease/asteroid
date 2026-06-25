@@ -20,9 +20,8 @@ Unleashed after the Initial Final Boss falls. These enemies are visually distinc
 *   **Bulwark:** Heavily armored units that shield other enemies behind them.
 *   **Teleporter:** Instantly changes position to ambush the player.
 *   **Juggler:** Bounces projectiles back or manipulates physics.
-*   **Sizzler:** Applies Heat damage to the player upon proximity, risking Overheat.
+*   **Sizzler:** Increases player Heat generation and reduces Heat decay upon proximity.
 *   **Breacher (Crisis):** extremely fast units designed specifically to damage the Void Barrier.
-*   **Brick Wall (Crisis):** Massive, passive structure with immense HP that blocks movement and projectiles.
 *   **Ghost Asteroid (Extended):** Invisible hazards revealed only by close proximity to the player or allies.
 
 ## Bosses
@@ -33,7 +32,7 @@ Major encounters that define the transition between game phases.
 *   **Encounter:** 300s (Global Time).
 *   **Role:** The Gatekeeper to the Void.
 *   **Mechanics:** Uses standard projectile patterns but with high density.
-*   **Reward:** Unlocks Void Mode and Void Skills.
+*   **Reward:** Unlocks Void Mode, Void Skills (after 100s Void Time), and Aim Mode.
 
 ### 2. Behemoth
 *   **Encounter:** 150s (Void Time).
@@ -41,7 +40,6 @@ Major encounters that define the transition between game phases.
 *   **Type:** Turret / Mini-Boss.
 *   **Mechanics:**
     *   Stationary but rotates to track the player.
-    *   70% Resistance to Laser Ally.
     *   Immune to AI Ally projectiles.
     *   Fires **Behemoth Bombs** (large AoE).
 *   **Reward:** Unlocks Void Mode: Extended and the **Vamp Ally**.
@@ -61,4 +59,4 @@ Major encounters that define the transition between game phases.
 *   **Mechanics:**
     *   Extremely fast movement.
     *   "Glitchy" appearance and hitboxes.
-    *   Utilizes advanced movement akin to the Crisis Mode "Drift" and "Inversion" mechanics.
+    *   Suppresses environmental Crisis events like Drift and Inversion.
