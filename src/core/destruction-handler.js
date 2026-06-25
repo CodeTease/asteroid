@@ -29,16 +29,15 @@ export class DestructionHandler {
                     game.ui.setTimerLabel("Void Time");
 
                     game.upgradePoints += 10;
+                    if (game.isAutoUpgradeEnabled) {
+                        game.upgradeSystem.autoUpgradeAllies();
+                    }
                     game.player.shieldCharges += 5;
                     game.screenShakeDuration = 60;
                     game.screenShakeIntensity = 20;
                     
                     game.echoAlly = new EchoAlly();
                     game.ui.updateGameStatus("Echo Ally Acquired!");
-
-                    if (!game.upgradeSystem.areAllUpgradesMaxed()) {
-                        game.isAutoUpgradeEnabled ? game.upgradeSystem.autoUpgradeAllies() : game.upgradeSystem.showUpgradeModal();
-                    }
                 } else if (asteroid instanceof Monolith) {
                      // MONOLITH DEFEATED - TRIGGER CRISIS MODE
                      audioManager.playSound('finalbossExplosion', 1.0);
@@ -55,14 +54,23 @@ export class DestructionHandler {
                      game.screenShakeIntensity = 25;
                      
                      // Reward?
+		             game.upgradePoints += 15;
                      game.score += 10000;
+
+		             if (game.isAutoUpgradeEnabled) {
+                        game.upgradeSystem.autoUpgradeAllies();
+                     }
                 } else if (asteroid instanceof AfterimageBoss) {
                      // AFTERIMAGE DEFEATED
                      audioManager.playSound('finalbossExplosion', 1.0);
                      game.isFinalBossActive = false;
                      game.ui.hideFinalBossHealth();
                      game.ui.updateGameStatus("AFTERIMAGE SHATTERED! ABYSS AWAITS...");
+		             game.upgradePoints += 30;
                      game.score += 50000;
+		             if (game.isAutoUpgradeEnabled) {
+                        game.upgradeSystem.autoUpgradeAllies();
+                     }
                      // Logic for Abyss Mode would go here (soon)
                 }
 
@@ -79,7 +87,7 @@ export class DestructionHandler {
                  const target = asteroid.anchorTarget;
                  if (target && game.asteroids.includes(target)) {
                      target.protectedBy = null;
-                     // Request: "lose 50% max HP immediately"
+		     // - 50% health immediately
                      const damage = target.maxHealth * 0.5;
                      target.health -= damage;
 
@@ -94,6 +102,10 @@ export class DestructionHandler {
                  game.vampAlly = new VampAlly();
                  game.ui.updateGameStatus("BEHEMOTH DESTROYED! THE EXTENDED OPENS...");
                  audioManager.playSound('AIupgraded');
+		         game.upgradePoints += 5;
+		         if (game.isAutoUpgradeEnabled) {
+                     game.upgradeSystem.autoUpgradeAllies();
+                 }
                  
                  // Show Barrier Immediately
                  game.ui.showVoidBarrier();
