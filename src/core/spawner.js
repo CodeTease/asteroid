@@ -1,7 +1,7 @@
 
 import * as UI from '../ui.js';
 import { Asteroid, BehemothTurret, Monolith, AfterimageBoss, GhostAsteroid, FinalBoss, StaticMine, BehemothBomb, Breacher, DefenseDrone } from '../enemies/index.js';
-import { AIAlly, LaserAlly, EchoAlly, VampAlly, SolidDecoy } from '../allies/index.js';
+import { AIAlly, LaserAlly, EchoAlly, VampAlly } from '../allies/index.js';
 import { audioManager } from '../audio.js';
 import { CONFIG } from '../config.js';
 

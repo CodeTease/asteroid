@@ -32,6 +32,7 @@ export class AfterimageBoss extends Asteroid {
         this.trueX = this.x;
         this.trueY = this.y;
         this.lastRiftTime = 0;
+        this.hasSplit = false;
     }
     
     draw(game) {
@@ -87,6 +88,18 @@ export class AfterimageBoss extends Asteroid {
     
     update(game, dt) {
         const moveFactor = 60 * dt;
+
+        // Ultimate Split Check
+        if (!this.hasSplit && this.health <= 1000) {
+            this.hasSplit = true;
+            game.updateGameStatus("TRIPLE THREAT: ULTIMATE SPLIT ACTIVE!");
+            for (let i = 0; i < 2; i++) {
+                const margin = 60;
+                const spawnX = margin + Math.random() * (canvas.width - margin * 2);
+                const spawnY = this.y + (Math.random() - 0.5) * 200;
+                game.asteroids.push(new SolidDecoy(game, spawnX, spawnY, this));
+            }
+        }
         
         // Restore True Position from Glitch Step
         if (this.state === 'idle' || this.state === 'lock') {
@@ -143,7 +156,7 @@ export class AfterimageBoss extends Asteroid {
                   game.asteroids.push(this.drone);
                   this.lastDroneSpawn = game.gameTime;
                   game.updateGameStatus("Guardian Drone Deployed!");
-             }
+              }
         }
         // Phase 2 Elite Spawn handled in Game loop or here? 
         if (this.enraged && game.gameTime - this.lastDroneSpawn > 20) { // faster CD
@@ -166,16 +179,6 @@ export class AfterimageBoss extends Asteroid {
             if (this.stateTimer <= 0) {
                 this.state = 'lock';
                 this.stateTimer = this.enraged ? 0.5 : 1.5; // Buffed Lock Times
-                
-                // Phantom Feint / Solid Decoys (Enraged) – 40% chance per lock
-                if (this.enraged && Math.random() < 0.4) {
-                     for(let i=0; i<2; i++) {
-                         const margin = 60;
-                         const spawnX = margin + Math.random() * (canvas.width - margin * 2);
-                         const spawnY = this.y + (Math.random() - 0.5) * 200;
-                         game.asteroids.push(new SolidDecoy(game, spawnX, spawnY, this));
-                     }
-                }
 
                 // Lock onto player
                 if (game.player) {
@@ -230,7 +233,7 @@ export class AfterimageBoss extends Asteroid {
              this.y += this.dashVelocity.y * moveFactor;
              
              // Residual Void (Spawn Rifts)
-             if (performance.now() - this.lastRiftTime > 100) { // Every 100ms
+             if (!this.hasSplit && performance.now() - this.lastRiftTime > 100) { // Every 100ms
                  game.enemyProjectiles.push(new VoidRift(this.x, this.y));
                  this.lastRiftTime = performance.now();
              }
@@ -261,7 +264,9 @@ export class AfterimageBoss extends Asteroid {
              if (hitWall) {
                  game.createExplosion(this.x, this.y, 'cyan', 20);
                  
-                 if (this.enraged && this.dashCount > 0) {
+                 if (this.hasSplit) {
+                     // Bypasses decrementing dashCount, shattering, and rewinding. Bounces indefinitely.
+                 } else if (this.enraged && this.dashCount > 0) {
                      this.dashCount--;
                      // Continue Dashing
                  } else {
