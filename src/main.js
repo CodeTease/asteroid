@@ -90,6 +90,9 @@ window.addEventListener('DOMContentLoaded', () => {
                 game.upgradeSystem.showUpgradeModal();
             }
         }
+        if (e.key === 'Shift' && game.player && game.isAbyssMode) {
+            game.player.dash();
+        }
     });
     window.addEventListener('keyup', (e) => { game.keys[e.key] = false; });
 
@@ -121,7 +124,12 @@ window.addEventListener('DOMContentLoaded', () => {
 
             // Move player (Constraint to X axis mostly, but Aim Mode relies on touch position)
             // Classic movement:
-            game.player.x = Math.max(game.player.size, Math.min(UI.canvas.width - game.player.size, touchX));
+            if (!game.isAbyssMode) {
+                 game.player.x = Math.max(game.player.size, Math.min(UI.canvas.width - game.player.size, touchX));
+            } else {
+                 game.player.x = Math.max(game.player.size, Math.min(game.worldWidth - game.player.size, touchX + game.cameraX));
+                 game.player.y = Math.max(game.player.size, Math.min(game.worldHeight - game.player.size, touchY + game.cameraY));
+            }
             
             // Update aim position
             game.mousePos = { x: touchX, y: touchY };
@@ -235,7 +243,7 @@ window.addEventListener('DOMContentLoaded', () => {
         // Iterate backwards to safely remove
         for (let i = game.asteroids.length - 1; i >= 0; i--) {
             const asteroid = game.asteroids[i];
-            if (!asteroid.isBoss) { // Don't kill Boss/Mini-boss usually, but request said "all enemies"
+            if (!asteroid.isBoss) { 
                  // Setting health to 0 triggers explosion and drops in game loop
                  asteroid.health = 0;
                  // Force immediate handle if we want instant clear, but letting game loop handle it
@@ -243,8 +251,6 @@ window.addEventListener('DOMContentLoaded', () => {
                  // However, let's call handleAsteroidDestruction directly to ensure they are gone now
                  game.handleAsteroidDestruction(asteroid, i);
             } else {
-                 // For bosses, maybe just deal massive damage?
-                 // Request said "Kill all". Let's kill bosses too.
                  asteroid.health = 0;
                  game.handleAsteroidDestruction(asteroid, i);
             }

@@ -1,4 +1,5 @@
 import { Player } from '../entities/player.js';
+import { Mothership } from '../entities/mothership.js';
 import { Projectile } from '../entities/projectiles.js';
 import { Asteroid, FinalBoss, Monolith, AfterimageBoss, BehemothBomb } from '../enemies/index.js';
 import { EchoAlly, VampAlly } from '../allies/index.js';
@@ -16,7 +17,7 @@ import { UIManager } from './ui-manager.js';
 import { EventManager } from './environment/event-manager.js';
 import { SkillManager } from './skills/skill-manager.js';
 import { DestructionHandler } from './destruction-handler.js';
-import { StateManager, NormalState, VoidState, CrisisState } from './state-manager.js';
+import { StateManager, NormalState, VoidState, CrisisState, AbyssState } from './state-manager.js';
 
 export class Game {
     constructor() {
@@ -37,6 +38,7 @@ export class Game {
         this.stateManager.register('Normal', new NormalState());
         this.stateManager.register('Void', new VoidState());
         this.stateManager.register('Crisis', new CrisisState());
+        this.stateManager.register('Abyss', new AbyssState());
         
         this.spawner = new Spawner(this);
         this.collisionSystem = new CollisionSystem(this);
@@ -84,6 +86,15 @@ export class Game {
         this.behemothSpawned = false;
         this.behemothDefeated = false;
         this.crisisMode = false;
+
+        // ABYSS MODE VARS
+        this.isAbyssMode = false;
+        this.abyssStartTime = 0;
+        this.mothership = null;
+        this.cameraX = 0;
+        this.cameraY = 0;
+        this.worldWidth = 0;
+        this.worldHeight = 0;
 
         // VOID BARRIER & OVERLOAD
         this.voidBarrierHealth = 100;
@@ -178,6 +189,16 @@ export class Game {
 
         this.voidBarrierHealth = 100;
         this.maxVoidBarrierHealth = 100;
+
+        this.isAbyssMode = false;
+        this.abyssStartTime = 0;
+        this.mothership = null;
+        this.cameraX = 0;
+        this.cameraY = 0;
+        if (this.ui.canvas) {
+            this.worldWidth = this.ui.canvas.width;
+            this.worldHeight = this.ui.canvas.height;
+        }
 
         // Reset sub-managers
         this.eventManager.reset();
@@ -311,11 +332,24 @@ export class Game {
         return Math.max(0, this.gameTime - this.voidStartTime);
     }
     
+    getAbyssTime() {
+        return Math.max(0, this.gameTime - this.abyssStartTime);
+    }
+    
     draw() {
         const ctx = this.ui.canvas ? this.ui.canvas.getContext('2d') : null;
         if (!ctx) return;
 
         ctx.save();
+
+        if (this.isAbyssMode && this.player) {
+            this.cameraX = this.player.x - ctx.canvas.width / 2;
+            this.cameraY = this.player.y - ctx.canvas.height / 2;
+            this.cameraX = Math.max(0, Math.min(this.cameraX, this.worldWidth - ctx.canvas.width));
+            this.cameraY = Math.max(0, Math.min(this.cameraY, this.worldHeight - ctx.canvas.height));
+            ctx.translate(-this.cameraX, -this.cameraY);
+        }
+
         if (this.screenShakeDuration > 0) {
             const dx = (Math.random() - 0.5) * this.screenShakeIntensity * 2;
             const dy = (Math.random() - 0.5) * this.screenShakeIntensity * 2;
@@ -323,7 +357,10 @@ export class Game {
             this.screenShakeDuration--;
         }
 
-        ctx.clearRect(-ctx.canvas.width, -ctx.canvas.height, ctx.canvas.width * 2, ctx.canvas.height * 2);
+        // We clear based on the camera position now to ensure the whole view is clean
+        const clearX = this.isAbyssMode ? this.cameraX - ctx.canvas.width : -ctx.canvas.width;
+        const clearY = this.isAbyssMode ? this.cameraY - ctx.canvas.height : -ctx.canvas.height;
+        ctx.clearRect(clearX, clearY, ctx.canvas.width * 3, ctx.canvas.height * 3);
 
         this.player.draw(this);
         this.player.allies.forEach(p => p.draw());
@@ -338,12 +375,16 @@ export class Game {
         this.asteroids.forEach(a => a.draw(this));
         this.particles.forEach(p => p.draw());
 
+        if (this.mothership) this.mothership.draw();
+
         if (this.isAimUnlocked) {
             ctx.save();
             ctx.strokeStyle = '#00ff00';
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.arc(this.mousePos.x, this.mousePos.y, 10, 0, Math.PI * 2);
+            const aimX = this.isAbyssMode ? this.mousePos.x + this.cameraX : this.mousePos.x;
+            const aimY = this.isAbyssMode ? this.mousePos.y + this.cameraY : this.mousePos.y;
+            ctx.arc(aimX, aimY, 10, 0, Math.PI * 2);
             ctx.stroke();
             ctx.restore();
         }
@@ -354,7 +395,9 @@ export class Game {
         if (this.flashDuration > 0) {
             ctx.globalAlpha = this.flashDuration / 10;
             ctx.fillStyle = 'white';
-            ctx.fillRect(-ctx.canvas.width, -ctx.canvas.height, ctx.canvas.width * 2, ctx.canvas.height * 2);
+            const flashX = this.isAbyssMode ? this.cameraX - ctx.canvas.width : -ctx.canvas.width;
+            const flashY = this.isAbyssMode ? this.cameraY - ctx.canvas.height : -ctx.canvas.height;
+            ctx.fillRect(flashX, flashY, ctx.canvas.width * 3, ctx.canvas.height * 3);
             this.flashDuration--;
         }
 
@@ -428,8 +471,16 @@ export class Game {
         if (canvas) {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight - 50;
+            if (!this.isAbyssMode) {
+                this.worldWidth = canvas.width;
+                this.worldHeight = canvas.height;
+            } else {
+                this.worldWidth = canvas.width * CONFIG.ABYSS.WORLD_WIDTH_MULTIPLIER;
+                this.worldHeight = canvas.height * CONFIG.ABYSS.WORLD_HEIGHT_MULTIPLIER;
+            }
             if (this.player) {
-                this.player.x = Math.max(this.player.size, Math.min(canvas.width - this.player.size, this.player.x));
+                this.player.x = Math.max(this.player.size, Math.min(this.worldWidth - this.player.size, this.player.x));
+                this.player.y = Math.max(this.player.size, Math.min(this.worldHeight - this.player.size, this.player.y));
             }
         }
     }

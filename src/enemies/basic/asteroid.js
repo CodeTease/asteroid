@@ -290,160 +290,186 @@ export class Asteroid {
              return; // Skip other movement logic
         }
 
-        if (this.type === 'orbiter') {
-            if (game.player && !game.player.isDestroyed) {
-                const dx = game.player.x - this.x;
-                const dy = game.player.y - this.y;
-                const dist = Math.hypot(dx, dy);
-
-                if (dist < this.orbitRadius + 50 && dist > this.orbitRadius - 50) {
-                    this.isOrbiting = true;
-                }
-
-                if (this.isOrbiting) {
-                    // Orbit logic
-                    this.orbitAngle += 0.05 * moveFactor;
-                    this.x = game.player.x + Math.cos(this.orbitAngle) * this.orbitRadius;
-                    this.y = game.player.y + Math.sin(this.orbitAngle) * this.orbitRadius;
-                } else {
-                    // Approach logic
-                    this.y += this.speed * moveFactor;
-                    // Mild seek
-                    this.x += (dx / dist) * this.speed * moveFactor;
-                }
-            } else {
-                this.y += this.speed * moveFactor;
-            }
-
-        } else if (this.type === 'weaver') {
-            this.weaverTime += 0.05 * moveFactor;
-            this.y += this.speed * moveFactor;
-            this.x = this.baseX + Math.sin(this.weaverTime) * 100; // Zig Zag
-
-            // Drop Mines
-            if (Math.random() < 0.01) {
-                game.enemyProjectiles.push(new StaticMine(this.x, this.y));
-            }
-
-        } else if (this.type === 'bulwark') {
-            this.y += this.speed * moveFactor; // Slow march
-
-        } else if (this.type === 'sizzler') {
-            this.y += this.speed * moveFactor; // Straight line, slow
-
-        } else if (this.type === 'juggler') {
-            if (game.player && !game.player.isDestroyed) {
-                const dx = game.player.x - this.x;
-                const dy = game.player.y - this.y;
-                const dist = Math.hypot(dx, dy);
-
-                // Movement Logic: Maintain 150px distance
-                const targetDist = 150;
-                if (dist > targetDist + 10) {
-                    this.x += (dx / dist) * this.speed * moveFactor;
-                    this.y += (dy / dist) * this.speed * moveFactor;
-                } else if (dist < targetDist - 10) {
-                    this.x -= (dx / dist) * this.speed * moveFactor;
-                    this.y -= (dy / dist) * this.speed * moveFactor;
-                } else {
-                    // Orbit slightly if at sweet spot
-                     this.x += Math.sin(Date.now() / 500) * this.speed * moveFactor;
-                }
-
-                // Push Logic
-                if (dist < this.pushRadius) {
-                    // Draw force field effect
-                    ctx.save();
-                    ctx.strokeStyle = 'rgba(0, 255, 0, 0.3)';
-                    ctx.beginPath();
-                    ctx.arc(this.x, this.y, this.pushRadius, 0, Math.PI * 2);
-                    ctx.stroke();
-                    ctx.restore();
-
-                    // Push player
-                    // Direction is random or away. Requirement says: "random direction or push away".
-                    // Let's do random for more chaos as per "Juggler" name.
-                    if (Math.random() < 0.1) {
-                         const pushForce = (Math.random() - 0.5) * 5; // Random left/right push
-                         game.player.vx += pushForce;
-                    }
-                }
-            } else {
-                 this.y += this.speed * moveFactor;
-            }
-
-        } else if (this.type === 'anchor') {
-            // Find target if none
-            if (!this.anchorTarget || this.anchorTarget.health <= 0 || !game.asteroids.includes(this.anchorTarget)) {
-                this.anchorTarget = null;
-                // Look for big enemies
-                const potentialTargets = game.asteroids.filter(a =>
-                    (a.type === 'bulwark' || a.type === 'brute' || a.type === 'sizzler') &&
-                    a !== this && !a.protectedBy
-                );
-
-                if (potentialTargets.length > 0) {
-                    // Pick closest
-                    let minD = Infinity;
-                    for (const t of potentialTargets) {
-                        const d = Math.hypot(this.x - t.x, this.y - t.y);
-                        if (d < minD) {
-                            minD = d;
-                            this.anchorTarget = t;
-                        }
-                    }
-                }
-            }
-
-            if (this.anchorTarget) {
-                this.anchorTarget.protectedBy = this;
-                // Orbit/Follow Logic
-                const dx = this.anchorTarget.x - this.x;
-                const dy = this.anchorTarget.y - this.y;
-                const dist = Math.hypot(dx, dy);
-                const desiredDist = this.anchorTarget.size + 40;
-
-                if (dist > desiredDist + 5) {
-                    this.x += (dx / dist) * this.speed * 1.5 * moveFactor; // Catch up fast
-                    this.y += (dy / dist) * this.speed * 1.5 * moveFactor;
-                } else if (dist < desiredDist - 5) {
-                    this.x -= (dx / dist) * this.speed * moveFactor;
-                    this.y -= (dy / dist) * this.speed * moveFactor;
-                } else {
-                    // Orbit
-                    const angle = Math.atan2(dy, dx) + (0.05 * moveFactor);
-                    this.x = this.anchorTarget.x - Math.cos(angle) * desiredDist;
-                    this.y = this.anchorTarget.y - Math.sin(angle) * desiredDist;
-                }
-            } else {
-                // No target, just move down
-                this.y += this.speed * moveFactor;
-            }
-
-        } else if (this.type === 'seeker') {
+        if (game.isAbyssMode) {
+             let target = null;
              if (game.player && !game.player.isDestroyed) {
                  const dx = game.player.x - this.x;
                  const dy = game.player.y - this.y;
-                 const dist = Math.hypot(dx, dy);
-                 this.x += (dx / dist) * this.speed * moveFactor;
-                 this.y += (dy / dist) * this.speed * moveFactor;
-             } else {
-                 this.y += this.speed * moveFactor;
+                 const distToPlayer = Math.hypot(dx, dy);
+                 if (distToPlayer <= CONFIG.ABYSS.AGGRO_RADIUS) {
+                     target = game.player;
+                 }
              }
-        } else if (this.type === 'teleporter') {
-            this.y += this.speed * moveFactor;
-            if (Date.now() - this.lastTeleportTime > this.teleportCooldown) {
-                this.x = Math.random() * (canvas.width - 100) + 50;
-                this.y = Math.random() * (canvas.height / 2); 
-                this.lastTeleportTime = Date.now();
-                game.createExplosion(this.x, this.y, this.color, 10);
-                audioManager.playSound('enemyShoot', 0.2);
-            }
+             if (!target && game.mothership && game.mothership.health > 0) {
+                 target = game.mothership;
+             }
+             
+             if (target) {
+                 const dx = target.x - this.x;
+                 const dy = target.y - this.y;
+                 const dist = Math.hypot(dx, dy);
+                 if (dist > 0) {
+                     // Mild avoidance of each other could be added later, for now just rush
+                     this.x += (dx / dist) * this.speed * moveFactor;
+                     this.y += (dy / dist) * this.speed * moveFactor;
+                 }
+             }
         } else {
-            this.y += this.speed * moveFactor;
-            this.x += this.vx * moveFactor;
-            if (this.x < this.size || this.x > canvas.width - this.size) {
-                this.vx *= -1;
+            if (this.type === 'orbiter') {
+                if (game.player && !game.player.isDestroyed) {
+                    const dx = game.player.x - this.x;
+                    const dy = game.player.y - this.y;
+                    const dist = Math.hypot(dx, dy);
+
+                    if (dist < this.orbitRadius + 50 && dist > this.orbitRadius - 50) {
+                        this.isOrbiting = true;
+                    }
+
+                    if (this.isOrbiting) {
+                        // Orbit logic
+                        this.orbitAngle += 0.05 * moveFactor;
+                        this.x = game.player.x + Math.cos(this.orbitAngle) * this.orbitRadius;
+                        this.y = game.player.y + Math.sin(this.orbitAngle) * this.orbitRadius;
+                    } else {
+                        // Approach logic
+                        this.y += this.speed * moveFactor;
+                        // Mild seek
+                        this.x += (dx / dist) * this.speed * moveFactor;
+                    }
+                } else {
+                    this.y += this.speed * moveFactor;
+                }
+
+            } else if (this.type === 'weaver') {
+                this.weaverTime += 0.05 * moveFactor;
+                this.y += this.speed * moveFactor;
+                this.x = this.baseX + Math.sin(this.weaverTime) * 100; // Zig Zag
+
+                // Drop Mines
+                if (Math.random() < 0.01) {
+                    game.enemyProjectiles.push(new StaticMine(this.x, this.y));
+                }
+
+            } else if (this.type === 'bulwark') {
+                this.y += this.speed * moveFactor; // Slow march
+
+            } else if (this.type === 'sizzler') {
+                this.y += this.speed * moveFactor; // Straight line, slow
+
+            } else if (this.type === 'juggler') {
+                if (game.player && !game.player.isDestroyed) {
+                    const dx = game.player.x - this.x;
+                    const dy = game.player.y - this.y;
+                    const dist = Math.hypot(dx, dy);
+
+                    // Movement Logic: Maintain 150px distance
+                    const targetDist = 150;
+                    if (dist > targetDist + 10) {
+                        this.x += (dx / dist) * this.speed * moveFactor;
+                        this.y += (dy / dist) * this.speed * moveFactor;
+                    } else if (dist < targetDist - 10) {
+                        this.x -= (dx / dist) * this.speed * moveFactor;
+                        this.y -= (dy / dist) * this.speed * moveFactor;
+                    } else {
+                        // Orbit slightly if at sweet spot
+                         this.x += Math.sin(Date.now() / 500) * this.speed * moveFactor;
+                    }
+
+                    // Push Logic
+                    if (dist < this.pushRadius) {
+                        // Draw force field effect
+                        ctx.save();
+                        ctx.strokeStyle = 'rgba(0, 255, 0, 0.3)';
+                        ctx.beginPath();
+                        ctx.arc(this.x, this.y, this.pushRadius, 0, Math.PI * 2);
+                        ctx.stroke();
+                        ctx.restore();
+
+                        // Push player
+                        // Direction is random or away. Requirement says: "random direction or push away".
+                        // Let's do random for more chaos as per "Juggler" name.
+                        if (Math.random() < 0.1) {
+                             const pushForce = (Math.random() - 0.5) * 5; // Random left/right push
+                             game.player.vx += pushForce;
+                        }
+                    }
+                } else {
+                     this.y += this.speed * moveFactor;
+                }
+
+            } else if (this.type === 'anchor') {
+                // Find target if none
+                if (!this.anchorTarget || this.anchorTarget.health <= 0 || !game.asteroids.includes(this.anchorTarget)) {
+                    this.anchorTarget = null;
+                    // Look for big enemies
+                    const potentialTargets = game.asteroids.filter(a =>
+                        (a.type === 'bulwark' || a.type === 'brute' || a.type === 'sizzler') &&
+                        a !== this && !a.protectedBy
+                    );
+
+                    if (potentialTargets.length > 0) {
+                        // Pick closest
+                        let minD = Infinity;
+                        for (const t of potentialTargets) {
+                            const d = Math.hypot(this.x - t.x, this.y - t.y);
+                            if (d < minD) {
+                                minD = d;
+                                this.anchorTarget = t;
+                            }
+                        }
+                    }
+                }
+
+                if (this.anchorTarget) {
+                    this.anchorTarget.protectedBy = this;
+                    // Orbit/Follow Logic
+                    const dx = this.anchorTarget.x - this.x;
+                    const dy = this.anchorTarget.y - this.y;
+                    const dist = Math.hypot(dx, dy);
+                    const desiredDist = this.anchorTarget.size + 40;
+
+                    if (dist > desiredDist + 5) {
+                        this.x += (dx / dist) * this.speed * 1.5 * moveFactor; // Catch up fast
+                        this.y += (dy / dist) * this.speed * 1.5 * moveFactor;
+                    } else if (dist < desiredDist - 5) {
+                        this.x -= (dx / dist) * this.speed * moveFactor;
+                        this.y -= (dy / dist) * this.speed * moveFactor;
+                    } else {
+                        // Orbit
+                        const angle = Math.atan2(dy, dx) + (0.05 * moveFactor);
+                        this.x = this.anchorTarget.x - Math.cos(angle) * desiredDist;
+                        this.y = this.anchorTarget.y - Math.sin(angle) * desiredDist;
+                    }
+                } else {
+                    // No target, just move down
+                    this.y += this.speed * moveFactor;
+                }
+
+            } else if (this.type === 'seeker') {
+                 if (game.player && !game.player.isDestroyed) {
+                     const dx = game.player.x - this.x;
+                     const dy = game.player.y - this.y;
+                     const dist = Math.hypot(dx, dy);
+                     this.x += (dx / dist) * this.speed * moveFactor;
+                     this.y += (dy / dist) * this.speed * moveFactor;
+                 } else {
+                     this.y += this.speed * moveFactor;
+                 }
+            } else if (this.type === 'teleporter') {
+                this.y += this.speed * moveFactor;
+                if (Date.now() - this.lastTeleportTime > this.teleportCooldown) {
+                    this.x = Math.random() * (canvas.width - 100) + 50;
+                    this.y = Math.random() * (canvas.height / 2); 
+                    this.lastTeleportTime = Date.now();
+                    game.createExplosion(this.x, this.y, this.color, 10);
+                    audioManager.playSound('enemyShoot', 0.2);
+                }
+            } else {
+                this.y += this.speed * moveFactor;
+                this.x += this.vx * moveFactor;
+                if (this.x < this.size || this.x > canvas.width - this.size) {
+                    this.vx *= -1;
+                }
             }
         }
 

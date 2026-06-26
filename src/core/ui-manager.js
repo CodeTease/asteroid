@@ -20,7 +20,7 @@ export class UIManager {
     updateHUD(game) {
         UI.scoreDisplay.innerText = `${game.score}`;
         UI.shieldDisplay.innerText = `${game.player.shieldCharges}`;
-        const displayTime = game.finalBossDefeated ? game.getVoidTime() : game.gameTime;
+        const displayTime = game.isAbyssMode ? game.getAbyssTime() : (game.finalBossDefeated ? game.getVoidTime() : game.gameTime);
         UI.timerDisplay.innerText = `${Math.floor(displayTime)}s`;
         UI.updateUpgradePoints(game.upgradePoints);
         

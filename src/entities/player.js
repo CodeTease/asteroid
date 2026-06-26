@@ -30,6 +30,12 @@ export class Player {
         this.maxHeat = CONFIG.PLAYER.MAX_HEAT;
         this.isOverheated = false;
         this.overheatTimeout = null;
+
+        // Abyss Mode: Dash
+        this.dashCharges = CONFIG.ABYSS.MAX_DASH_CHARGES;
+        this.isDashing = false;
+        this.dashTimer = 0;
+        this.lastDashTime = 0;
     }
 
     draw(game) {
@@ -106,7 +112,24 @@ export class Player {
 
             // Boundary checks for push
             if (this.x < this.size) this.x = this.size;
-            if (this.x > canvas.width - this.size) this.x = canvas.width - this.size;
+            if (this.x > game.worldWidth - this.size) this.x = game.worldWidth - this.size;
+        }
+
+        // Dash Logic
+        if (this.isDashing) {
+            this.dashTimer -= dt;
+            if (this.dashTimer <= 0) {
+                this.isDashing = false;
+            }
+        } else {
+            // Recharge Dash
+            if (this.dashCharges < CONFIG.ABYSS.MAX_DASH_CHARGES) {
+                const timeSinceLastDash = Date.now() - this.lastDashTime;
+                if (timeSinceLastDash > CONFIG.ABYSS.DASH_COOLDOWN * 1000) {
+                    this.dashCharges++;
+                    this.lastDashTime = Date.now();
+                }
+            }
         }
 
         // Field Inversion Logic
@@ -122,8 +145,20 @@ export class Player {
         }
         
         // Override movement input
-        if (leftKey && this.x > this.size) this.x -= moveSpeed;
-        if (rightKey && this.x < canvas.width - this.size) this.x += moveSpeed;
+        let currentSpeed = moveSpeed;
+        if (this.isDashing) {
+            currentSpeed += CONFIG.ABYSS.DASH_SPEED_ADDITIVE * 60 * dt;
+        }
+
+        if (leftKey && this.x > this.size) this.x -= currentSpeed;
+        if (rightKey && this.x < game.worldWidth - this.size) this.x += currentSpeed;
+
+        if (game.isAbyssMode) {
+            let upKey = (game.keys['ArrowUp'] || game.keys['w']);
+            let downKey = (game.keys['ArrowDown'] || game.keys['s']);
+            if (upKey && this.y > this.size) this.y -= currentSpeed;
+            if (downKey && this.y < game.worldHeight - this.size) this.y += currentSpeed;
+        }
 
         // Heat Decay
         if (!this.isOverheated && this.heat > 0) {
@@ -138,6 +173,16 @@ export class Player {
 
             this.heat -= decayRate * dt; // Decay speed
             if (this.heat < 0) this.heat = 0;
+        }
+    }
+
+    dash() {
+        if (this.dashCharges > 0 && !this.isDashing && !this.isDestroyed && !this.isStunned) {
+            this.dashCharges--;
+            this.isDashing = true;
+            this.dashTimer = CONFIG.ABYSS.DASH_DURATION;
+            this.lastDashTime = Date.now();
+            audioManager.playSound('shoot', 0.5); // TODO: Add dash sound
         }
     }
 

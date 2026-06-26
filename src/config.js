@@ -68,5 +68,15 @@ export const CONFIG = {
         SHIELD: '#00e5ff',
         BARRIER_SHOCK: '#ff0000',
         LASER: '#ff0000',
+    },
+    ABYSS: {
+        WORLD_WIDTH_MULTIPLIER: 3,
+        WORLD_HEIGHT_MULTIPLIER: 3,
+        MOTHERSHIP_HEALTH: 500,
+        AGGRO_RADIUS: 500,
+        DASH_COOLDOWN: 3,
+        DASH_DURATION: 0.25,
+        DASH_SPEED_ADDITIVE: 10,
+        MAX_DASH_CHARGES: 2,
     }
 };

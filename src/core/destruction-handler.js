@@ -71,7 +71,8 @@ export class DestructionHandler {
 		             if (game.isAutoUpgradeEnabled) {
                         game.upgradeSystem.autoUpgradeAllies();
                      }
-                     // Logic for Abyss Mode would go here (soon)
+                     // Transition to Abyss Mode
+                     game.stateManager.transition('Abyss', game);
                 }
 
                 game.createExplosion(asteroid.x, asteroid.y, asteroid.color, 400);
@@ -111,14 +112,18 @@ export class DestructionHandler {
                  game.ui.showVoidBarrier();
             }
 
-            // VAMP ALLY PASSIVE (Heal Barrier)
+            // VAMP ALLY PASSIVE (Heal Barrier or Mothership)
             if (game.vampAlly) {
-                 // Buff: 100% chance during Crisis, 20% otherwise
+                 // Buff: 100% chance during Crisis/Abyss, 20% otherwise
                  let healChance = 0.20;
-                 if (game.crisisMode) healChance = 1.0;
+                 if (game.crisisMode || game.isAbyssMode) healChance = 1.0;
 
                  if (Math.random() < healChance) {
-                     if (game.voidBarrierHealth < game.maxVoidBarrierHealth) {
+                     if (game.isAbyssMode && game.mothership) {
+                         if (game.mothership.health < game.mothership.maxHealth) {
+                              game.mothership.health = Math.min(game.mothership.maxHealth, game.mothership.health + 10);
+                         }
+                     } else if (game.voidBarrierHealth < game.maxVoidBarrierHealth) {
                           game.voidBarrierHealth = Math.min(game.maxVoidBarrierHealth, game.voidBarrierHealth + 1);
                           // Visual Feedback
                           game.ui.flashBarrierHeal();

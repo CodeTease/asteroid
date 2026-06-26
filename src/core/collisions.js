@@ -17,7 +17,7 @@ export class CollisionSystem {
             if (this.game.isGameOver) break;
             const asteroid = this.game.asteroids[j];
             if (this.checkCollision(this.game.player, asteroid)) {
-                if (this.game.godMode) return; // God Mode Check
+                if (this.game.godMode || this.game.player.isDashing) continue; // God Mode & I-frames Check
 
                 // AFTERIMAGE INSTANT KILL (Bypasses Shield)
                 if (asteroid instanceof AfterimageBoss) {
@@ -47,7 +47,7 @@ export class CollisionSystem {
             if (p instanceof BehemothBomb || p instanceof VoidRift) continue; // Custom collision
 
             if (this.checkCollision(this.game.player, p)) {
-                if (this.game.godMode) return; // God Mode Check
+                if (this.game.godMode || this.game.player.isDashing) continue; // God Mode & I-frames Check
 
                 if (this.game.player.shieldCharges > 0) {
                     this.game.player.shieldCharges--;
@@ -57,6 +57,29 @@ export class CollisionSystem {
                 }
                 this.game.enemyProjectiles.splice(j, 1);
                 break;
+            }
+        }
+
+        // Mothership vs Asteroids/Enemies (Abyss Mode)
+        if (this.game.isAbyssMode && this.game.mothership) {
+            for (let j = this.game.asteroids.length - 1; j >= 0; j--) {
+                const asteroid = this.game.asteroids[j];
+                if (this.checkCollision(this.game.mothership, asteroid)) {
+                    this.game.mothership.health -= asteroid.isBoss ? 50 : (asteroid.isElite ? 20 : 5);
+                    this.game.createExplosion(asteroid.x, asteroid.y, '#ff0000', 30);
+                    audioManager.playSound('playerHit', 0.5);
+                    
+                    if (asteroid.isBoss) {
+                        asteroid.health = 0; // Destroy boss as well? Or just let it pass/bounce?
+                    } else {
+                        this.game.asteroids.splice(j, 1);
+                    }
+
+                    if (this.game.mothership.health <= 0) {
+                        this.game.mothership.health = 0;
+                        this.game.handleGameOver("MOTHERSHIP DESTROYED!");
+                    }
+                }
             }
         }
 

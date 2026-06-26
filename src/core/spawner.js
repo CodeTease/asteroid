@@ -106,7 +106,7 @@ export class Spawner {
         }
 
         // AFTERIMAGE BOSS SPAWN (at 600s Void Time)
-        if (this.game.crisisMode && this.game.getVoidTime() >= 600 && !this.game.isFinalBossActive && !this.game.finalBoss) {
+        if (this.game.crisisMode && this.game.getVoidTime() >= 600 && !this.game.isFinalBossActive && !this.game.finalBoss && !this.game.isAbyssMode) {
              this.game.isFinalBossActive = true;
              this.game.isBossActive = false;
              

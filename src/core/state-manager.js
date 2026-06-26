@@ -1,3 +1,6 @@
+import { Mothership } from '../entities/mothership.js';
+import { CONFIG } from '../config.js';
+
 export class StateManager {
     constructor() {
         this.states = {};
@@ -103,6 +106,47 @@ export class CrisisState {
         game.eventManager.update(dt, game);
 
         // Handle skills
+        game.skillManager.update(dt, game);
+    }
+
+    draw(ctx, game) {
+        game.eventManager.draw(ctx, game);
+    }
+}
+
+export class AbyssState {
+    enter(game) {
+        game.isAbyssMode = true;
+        game.abyssStartTime = game.gameTime;
+        game.ui.setTimerLabel("Abyss Time");
+        game.ui.hideVoidBarrier();
+        
+        // Recalculate world boundaries
+        if (game.ui.canvas) {
+            game.worldWidth = game.ui.canvas.width * CONFIG.ABYSS.WORLD_WIDTH_MULTIPLIER;
+            game.worldHeight = game.ui.canvas.height * CONFIG.ABYSS.WORLD_HEIGHT_MULTIPLIER;
+        }
+        
+        // Spawn Mothership at center of the expanded world
+        game.mothership = new Mothership(game.worldWidth / 2, game.worldHeight / 2);
+        
+        // Relocate player to near mothership
+        if (game.player) {
+            game.player.x = game.worldWidth / 2;
+            game.player.y = game.worldHeight / 2 + 100;
+        }
+
+        // Show UI elements (assume heat group is needed)
+        game.ui.showHeatGroup();
+    }
+
+    update(dt, game) {
+        if (!game.isGameOver) {
+            // Re-use standard spawner for now (as requested)
+            game.spawner.handleSpawning();
+        }
+
+        game.eventManager.update(dt, game);
         game.skillManager.update(dt, game);
     }
 
