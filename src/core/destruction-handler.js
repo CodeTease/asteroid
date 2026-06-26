@@ -109,7 +109,9 @@ export class DestructionHandler {
                  }
                  
                  // Show Barrier Immediately
-                 game.ui.showVoidBarrier();
+                 if (!game.isAbyssMode) {
+                     game.ui.showVoidBarrier();
+                 }
             }
 
             // VAMP ALLY PASSIVE (Heal Barrier or Mothership)

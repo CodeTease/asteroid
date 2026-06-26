@@ -446,6 +446,7 @@ export class Game {
     }
 
     takeBarrierDamage(amount) {
+        if (this.isAbyssMode) return;
         this.voidBarrierHealth -= amount;
         this.screenShakeDuration = 5;
         

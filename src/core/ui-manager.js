@@ -38,8 +38,8 @@ export class UIManager {
             }
         }
 
-        // Update Void Barrier (Only if unlocked)
-        if (game.behemothDefeated) {
+        // Update Void Barrier (Only if unlocked and not in Abyss Mode)
+        if (game.behemothDefeated && !game.isAbyssMode) {
             const barrierPercent = (game.voidBarrierHealth / game.maxVoidBarrierHealth) * 100;
             UI.voidBarrierBar.style.width = `${Math.max(0, barrierPercent)}%`;
             if (game.voidBarrierHealth < 30) {
@@ -49,6 +49,8 @@ export class UIManager {
                  UI.voidBarrierBar.style.boxShadow = `0 0 10px #00ffff`;
                  UI.voidBarrierBar.style.background = `linear-gradient(90deg, #00ffff, #0088ff)`;
             }
+        } else {
+            UI.voidBarrierContainer.style.display = 'none';
         }
     }
 

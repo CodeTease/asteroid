@@ -42,6 +42,14 @@ export class EventManager {
      * Extracted from game.js update() L231-L360
      */
     update(dt, game) {
+        if (game.isAbyssMode) {
+            game.ui.hideVoidBarrier();
+            this.isDarknessActive = false;
+            this.isDriftActive = false;
+            this.isInputInverted = false;
+            return;
+        }
+
         if (!game.behemothDefeated || game.isGameOver) {
             game.ui.hideVoidBarrier();
             this.isDarknessActive = false;
